@@ -1,0 +1,377 @@
+import { QUESTIONS } from './questions.js';
+import {
+  $, store, load, esc, modeOf, baseOf, dirOf, ancestors, norm,
+  wrap, fix, inline, BRIDGE
+} from './functions.js';
+
+const params = new URLSearchParams(location.search);
+let key = QUESTIONS[params.get('q')] ? params.get('q') : (params.get('q') ? 'blank' : 'cafe-web');
+let docs = {}, custom = [], folders = [], open = new Set(), selDir = '', renaming = null, newMode = 'file', mainName = '', trash = [], cur = '', shown = 0, req = { m: 'get', d: {} };
+
+const MODES = { php: 'application/x-httpd-php', css: 'css', js: 'javascript', html: 'htmlmixed', json: 'application/json', txt: 'text/plain' };
+const ALLOWED = ['php', 'css', 'js', 'html', 'txt', 'json'], MAX_CUSTOM = 15, MAX_FOLDERS = 8;
+
+const cm = CodeMirror.fromTextArea($('code'), {
+  theme: 'material-darker', lineNumbers: true, matchBrackets: true, autoCloseBrackets: true,
+  indentUnit: 4, indentWithTabs: false, undoDepth: 1000, historyEventDelay: 400,
+  extraKeys: { 'Ctrl-Enter': () => runFresh(), 'Cmd-Enter': () => runFresh(), Tab: c => c.replaceSelection('    ') }
+});
+
+
+const providedNames = () => QUESTIONS[key].files.map(f => f.name);
+const allNames = () => providedNames().concat(custom);
+const metaOf = n => QUESTIONS[key].files.find(f => f.name === n) || { name: n, editable: true, custom: true };
+const defaultMain = () => (QUESTIONS[key].files.find(f => f.name.endsWith('.php')) || QUESTIONS[key].files[0]).name;
+const blankOf = n => n.endsWith('.php') ? '<?php\n\n' : '';
+function allFolders() {
+  const set = new Set();
+  folders.forEach(f => ancestors(f + '/x').forEach(a => set.add(a)));
+  custom.forEach(n => ancestors(n).forEach(a => set.add(a)));
+  return [...set].sort();
+}
+const saveCustom = () => {
+  store('custom:' + key, custom.length ? JSON.stringify(custom) : undefined);
+  store('folders:' + key, folders.length ? JSON.stringify(folders) : undefined);
+};
+function setMain(path, render = true) {
+  mainName = path;
+  store('main:' + key, path === defaultMain() ? undefined : path);
+  if (render) renderTabs();
+}
+function showFile(name) {
+  cur = name; selDir = dirOf(name);
+  cm.swapDoc(docs[name]);
+  updHist();
+  cm.setOption('readOnly', metaOf(name).editable ? false : 'nocursor');
+  renderTabs();
+}
+// Returns an error message, or '' when the path is fine. `ignore` = the item being renamed.
+function checkPath(path, isFolder, ignore) {
+  if (!path) return 'Type a name first.';
+  const parts = path.split('/'), fileSeg = /^[A-Za-z0-9_-][A-Za-z0-9_.-]{0,39}$/, dirSeg = /^[A-Za-z0-9_-]{1,40}$/;
+  if (parts.length > 4) return 'Folders can go up to 3 levels deep.';
+  for (let i = 0; i < parts.length; i++) {
+    const isFile = !isFolder && i === parts.length - 1;
+    if (!(isFile ? fileSeg : dirSeg).test(parts[i])) return isFile ? 'Use letters, numbers, - or _ only (no spaces).' : 'Folder names use letters, numbers, - or _ only.';
+  }
+  if (!isFolder) {
+    const b = baseOf(path);
+    if (!b.includes('.') || !ALLOWED.includes(b.split('.').pop().toLowerCase())) return 'The name must end in .php, .css, .js, .html, .txt or .json';
+  }
+  const inIgnored = n => ignore && (n === ignore || n.startsWith(ignore + '/'));
+  const files = allNames().filter(n => !inIgnored(n)), dirs = allFolders().filter(d => !inIgnored(d)), low = path.toLowerCase();
+  if (files.some(n => n.toLowerCase() === low) || dirs.some(d => d.toLowerCase() === low)) return 'That name is already used.';
+  if (ancestors(path).some(a => files.some(n => n.toLowerCase() === a.toLowerCase()))) return 'A file with that name is in the way.';
+  if (!ignore && !isFolder && custom.length >= MAX_CUSTOM) return 'You can create up to ' + MAX_CUSTOM + ' files.';
+  if (!ignore && isFolder && allFolders().length >= MAX_FOLDERS) return 'You can create up to ' + MAX_FOLDERS + ' folders.';
+  return '';
+}
+function createFile(raw) {
+  const path = norm(raw), err = checkPath(path, false);
+  if (err) return err;
+  custom.push(path); ancestors(path).forEach(a => open.add(a)); saveCustom();
+  docs[path] = CodeMirror.Doc(blankOf(path), modeOf(path));
+  store('f:' + key + ':' + path, blankOf(path));
+  showFile(path); cm.focus();
+  return '';
+}
+function createFolder(raw) {
+  const path = norm(raw), err = checkPath(path, true);
+  if (err) return err;
+  folders.push(path); ancestors(path + '/x').forEach(a => open.add(a)); selDir = path; saveCustom(); renderTabs();
+  return '';
+}
+function moveOne(old, path) {
+  custom[custom.indexOf(old)] = path;
+  const ext = n => n.split('.').pop().toLowerCase(), v = docs[old].getValue();
+  docs[path] = ext(old) === ext(path) ? docs[old] : CodeMirror.Doc(v, modeOf(path));
+  delete docs[old]; store('f:' + key + ':' + old); store('f:' + key + ':' + path, v);
+  if (cur === old) cur = path;
+  if (mainName === old) setMain(path, false);
+}
+function renameFile(old, raw) {
+  const path = norm(raw);
+  if (path === old) return '';
+  const err = checkPath(path, false, old);
+  if (err) return err;
+  moveOne(old, path); ancestors(path).forEach(a => open.add(a)); saveCustom(); showFile(cur);
+  return '';
+}
+function renameFolder(old, raw) {
+  const path = norm(raw);
+  if (path === old) return '';
+  if (path.startsWith(old + '/')) return 'A folder cannot be moved into itself.';
+  const err = checkPath(path, true, old);
+  if (err) return err;
+  const swap = p => path + p.slice(old.length), inside = p => p === old || p.startsWith(old + '/');
+  custom.filter(n => n.startsWith(old + '/')).forEach(n => moveOne(n, swap(n)));
+  folders = folders.map(f => inside(f) ? swap(f) : f);
+  open = new Set([...open].map(f => inside(f) ? swap(f) : f));
+  ancestors(path + '/x').forEach(a => open.add(a));
+  if (inside(selDir)) selDir = swap(selDir);
+  saveCustom(); showFile(cur);
+  return '';
+}
+function deletePath(path, isFolder) {
+  const inside = p => p === path || p.startsWith(path + '/');
+  const gone = isFolder ? custom.filter(inside) : [path];
+  const entry = { label: path, files: {}, folders: isFolder ? allFolders().filter(inside) : [] };
+  gone.forEach(n => { entry.files[n] = docs[n].getValue(); delete docs[n]; store('f:' + key + ':' + n); });
+  const wasCur = gone.includes(cur);
+  custom = custom.filter(n => !gone.includes(n));
+  if (isFolder) folders = folders.filter(f => !inside(f));
+  if (isFolder && inside(selDir)) selDir = dirOf(path);
+  trash.push(entry); if (trash.length > 5) trash.shift();
+  if (gone.includes(mainName)) setMain(defaultMain(), false);
+  saveCustom(); clearUndo(); updTrash();
+  showFile(wasCur ? QUESTIONS[key].files.find(f => f.editable).name : cur);
+}
+function updTrash() {
+  const b = $('undoDelete');
+  b.hidden = !trash.length;
+  if (trash.length) b.title = 'Restore ' + trash[trash.length - 1].label;
+}
+function undoDelete() {
+  const e = trash.pop();
+  if (!e) return;
+  e.folders.forEach(f => { if (!folders.includes(f)) folders.push(f); ancestors(f + '/x').forEach(a => open.add(a)); });
+  const taken = m => allNames().some(x => x.toLowerCase() === m.toLowerCase());
+  let first = '';
+  for (const n0 in e.files) {
+    let n = n0, k = 1;
+    while (taken(n)) { n = n0.replace(/(\.[^./]*)$/, '-restored' + (k > 1 ? k : '') + '$1'); k++; }
+    custom.push(n); ancestors(n).forEach(a => open.add(a));
+    docs[n] = CodeMirror.Doc(e.files[n0], modeOf(n)); store('f:' + key + ':' + n, e.files[n0]);
+    first = first || n;
+  }
+  saveCustom(); updTrash(); showFile(first || cur);
+}
+/* File icons: the MIT-licensed VS Code (vscode-icons) file-type icons for PHP, CSS, JS and HTML, embedded so no download is needed. */
+const ICON_SVG = {"php": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 32 32\"><defs><radialGradient id=\"SVGQRCVdbYF\" cx=\"-16.114\" cy=\"20.532\" r=\"18.384\" gradientTransform=\"translate(26.52 -9.307)\" gradientUnits=\"userSpaceOnUse\"><stop offset=\"0\" stop-color=\"#fff\"/><stop offset=\".5\" stop-color=\"#4c6b96\"/><stop offset=\"1\" stop-color=\"#231f20\"/></radialGradient></defs><ellipse cx=\"16\" cy=\"16\" fill=\"url(#SVGQRCVdbYF)\" rx=\"14\" ry=\"7.365\"/><ellipse cx=\"16\" cy=\"16\" fill=\"#6280b6\" rx=\"13.453\" ry=\"6.818\"/><path fill=\"#fff\" d=\"m18.725 18.2l.667-3.434a1.75 1.75 0 0 0-.372-1.719a2.93 2.93 0 0 0-2-.525h-1.153l.331-1.7a.22.22 0 0 0-.215-.26h-1.6a.22.22 0 0 0-.215.177l-.709 3.646a2.05 2.05 0 0 0-.477-1.054a2.78 2.78 0 0 0-2.2-.807H7.7a.22.22 0 0 0-.215.177l-1.434 7.38a.22.22 0 0 0 .215.26h1.603a.22.22 0 0 0 .215-.177l.347-1.785h1.2a5.2 5.2 0 0 0 1.568-.2a3.1 3.1 0 0 0 1.15-.689a3.5 3.5 0 0 0 .68-.844l-.287 1.475a.22.22 0 0 0 .215.26h1.6a.22.22 0 0 0 .215-.177l.787-4.051h1.094c.466 0 .6.093.64.133s.1.165.025.569l-.635 3.265a.22.22 0 0 0 .215.26h1.62a.22.22 0 0 0 .207-.18m-7.395-2.834a1.75 1.75 0 0 1-.561 1.092a2.17 2.17 0 0 1-1.315.321h-.712l.515-2.651h.921c.677 0 .949.145 1.059.266a1.18 1.18 0 0 1 .093.972m14.216-2.034a2.78 2.78 0 0 0-2.2-.807h-3.091a.22.22 0 0 0-.215.177l-1.434 7.38a.22.22 0 0 0 .215.26h1.608a.22.22 0 0 0 .215-.177l.347-1.785h1.2a5.2 5.2 0 0 0 1.568-.2a3.1 3.1 0 0 0 1.15-.689a3.43 3.43 0 0 0 1.076-1.927a2.51 2.51 0 0 0-.439-2.232m-1.667 2.034a1.75 1.75 0 0 1-.561 1.092a2.17 2.17 0 0 1-1.318.32h-.71l.515-2.651h.921c.677 0 .949.145 1.059.266a1.18 1.18 0 0 1 .094.973\"/><path fill=\"#000004\" d=\"M10.178 13.908a1.65 1.65 0 0 1 1.221.338a1.34 1.34 0 0 1 .145 1.161a1.95 1.95 0 0 1-.642 1.223a2.36 2.36 0 0 1-1.448.37h-.978l.6-3.089Zm-3.917 6.216h1.608l.381-1.962h1.377a5 5 0 0 0 1.5-.191a2.84 2.84 0 0 0 1.07-.642a3.2 3.2 0 0 0 1.01-1.808a2.3 2.3 0 0 0-.385-2.044a2.57 2.57 0 0 0-2.035-.732H7.7Zm8.126-9.342h1.6l-.387 1.962h1.421a2.77 2.77 0 0 1 1.85.468a1.55 1.55 0 0 1 .305 1.516l-.667 3.434H16.89l.635-3.265a.89.89 0 0 0-.08-.76a1.12 1.12 0 0 0-.8-.2H15.37l-.822 4.228h-1.6Zm8.34 3.126a1.65 1.65 0 0 1 1.221.338a1.34 1.34 0 0 1 .145 1.161a1.95 1.95 0 0 1-.642 1.223A2.36 2.36 0 0 1 22 17h-.978l.6-3.089Zm-3.917 6.216h1.608l.381-1.962h1.377a5 5 0 0 0 1.5-.191a2.84 2.84 0 0 0 1.07-.642a3.2 3.2 0 0 0 1.01-1.808a2.3 2.3 0 0 0-.385-2.044a2.57 2.57 0 0 0-2.035-.732h-3.092Z\"/></svg>", "css": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 32 32\"><path fill=\"#639\" d=\"M1.995 1.994h23.52a4.48 4.48 0 0 1 4.48 4.48v19.04a4.48 4.48 0 0 1-4.48 4.48H6.475a4.48 4.48 0 0 1-4.48-4.48Z\"/><path fill=\"#fff\" d=\"M9.079 24.87v-4.704c0-1.876 1.204-2.884 3.024-2.884c1.792-.028 2.912 1.148 2.856 3.136h-2.072c.056-.756-.28-1.316-.84-1.288c-.7 0-.896.476-.896 1.372v4.088c0 .868.28 1.288.896 1.316c.644 0 .896-.644.84-1.372h2.072c.112 2.044-1.176 3.248-2.996 3.22c-1.764 0-2.884-.98-2.884-2.884m6.636-.336h1.932c.028.896.308 1.456.924 1.456s.84-.364.84-1.204c0-.7-.308-1.092-1.064-1.456l-.728-.336c-1.288-.616-1.82-1.372-1.82-2.884c0-1.68 1.064-2.856 2.8-2.856s2.66 1.204 2.688 3.164h-1.876c0-.812-.168-1.372-.784-1.372c-.56 0-.84.28-.84.98s.252.98.924 1.26l.672.308c1.428.672 2.044 1.54 2.044 3.164c0 1.932-1.092 2.996-2.884 2.996s-2.8-1.232-2.828-3.22m6.328 0h1.96c0 .896.308 1.456.896 1.456s.84-.364.84-1.204c0-.7-.28-1.092-1.064-1.456l-.728-.336c-1.288-.616-1.792-1.372-1.792-2.884c0-1.68 1.036-2.856 2.8-2.856s2.632 1.204 2.688 3.164h-1.876c-.028-.812-.196-1.372-.812-1.372c-.56 0-.812.28-.812.98s.224.98.896 1.26l.7.308c1.4.672 2.016 1.54 2.016 3.164c0 1.932-1.092 2.996-2.884 2.996s-2.8-1.232-2.828-3.22\"/></svg>", "js": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 32 32\"><path fill=\"#f5de19\" d=\"M2 2h28v28H2z\"/><path d=\"M20.809 23.875a2.87 2.87 0 0 0 2.6 1.6c1.09 0 1.787-.545 1.787-1.3c0-.9-.716-1.222-1.916-1.747l-.658-.282c-1.9-.809-3.16-1.822-3.16-3.964c0-1.973 1.5-3.476 3.853-3.476a3.89 3.89 0 0 1 3.742 2.107L25 18.128A1.79 1.79 0 0 0 23.311 17a1.145 1.145 0 0 0-1.259 1.128c0 .789.489 1.109 1.618 1.6l.658.282c2.236.959 3.5 1.936 3.5 4.133c0 2.369-1.861 3.667-4.36 3.667a5.06 5.06 0 0 1-4.795-2.691Zm-9.295.228c.413.733.789 1.353 1.693 1.353c.864 0 1.41-.338 1.41-1.653v-8.947h2.631v8.982c0 2.724-1.6 3.964-3.929 3.964a4.085 4.085 0 0 1-3.947-2.4Z\"/></svg>", "html": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 32 32\"><path fill=\"#e44f26\" d=\"M5.902 27.201L3.655 2h24.69l-2.25 25.197L15.985 30z\"/><path fill=\"#f1662a\" d=\"m16 27.858l8.17-2.265l1.922-21.532H16z\"/><path fill=\"#ebebeb\" d=\"M16 13.407h-4.09l-.282-3.165H16V7.151H8.25l.074.83l.759 8.517H16zm0 8.027l-.014.004l-3.442-.929l-.22-2.465H9.221l.433 4.852l6.332 1.758l.014-.004z\"/><path fill=\"#fff\" d=\"M15.989 13.407v3.091h3.806l-.358 4.009l-3.448.93v3.216l6.337-1.757l.046-.522l.726-8.137l.076-.83zm0-6.256v3.091h7.466l.062-.694l.141-1.567l.074-.83z\"/></svg>", "other": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 32 32\"><path fill=\"#c5c5c5\" d=\"M20.414 2H5v28h22V8.586ZM7 28V4h12v6h6v18Z\"/></svg>"};
+ICON_SVG.folder = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 32 32\"><path fill=\"#c09553\" d=\"M27.5 5.5h-9.3l-2.1 4.2H4.4v16.8h25.2v-21Zm0 4.2h-8.2l1.1-2.1h7.1Z\"/></svg>";
+ICON_SVG.folderOpen = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 32 32\"><path fill=\"#dcb67a\" d=\"M27.4 5.5h-9.2l-2.1 4.2H4.3v16.8h25.2v-21Zm0 18.7H6.6V11.8h20.8Zm0-14.5h-8.2l1-2.1h7.1v2.1Z\"/><path fill=\"#dcb67a\" d=\"M25.7 13.7H.5l3.8 12.8h25.2z\"/></svg>";
+const ICON_URI = {};
+for (const k in ICON_SVG) ICON_URI[k] = 'data:image/svg+xml;base64,' + btoa(ICON_SVG[k]);
+const TRASH = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6"/></svg>';
+function icon(name) {
+  const ext = name.split('.').pop().toLowerCase();
+  return '<img class="ficon" alt="" src="' + (ICON_URI[ext] || ICON_URI.other) + '">';
+}
+const PLAY = '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M7 4l13 8-13 8z"/></svg>';
+const PEN = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20l4-1 11-11-3-3L5 16z"/></svg>';
+function actBtn(cls, title, svg, fn) {
+  const b = document.createElement('button');
+  b.className = cls; b.title = title; b.setAttribute('aria-label', title); b.innerHTML = svg; b.onclick = fn;
+  return b;
+}
+function renameRow(path, isFolder, depth) {
+  const w = document.createElement('div'), i = document.createElement('input'), e = document.createElement('div');
+  w.className = 'rnwrap'; w.style.paddingLeft = (10 + depth * 14) + 'px';
+  i.className = 'rn'; i.value = path; i.maxLength = 60; i.spellcheck = false; i.setAttribute('aria-label', 'New name for ' + path);
+  e.className = 'rnerr'; e.setAttribute('role', 'alert');
+  i.addEventListener('keydown', ev => {
+    if (ev.key === 'Enter') { const err = (isFolder ? renameFolder : renameFile)(path, i.value); if (err) e.textContent = err; else { renaming = null; renderTabs(); } }
+    else if (ev.key === 'Escape') { renaming = null; renderTabs(); }
+  });
+  i.addEventListener('input', () => { e.textContent = ''; });
+  i.addEventListener('blur', () => setTimeout(() => { if (renaming === path) { renaming = null; renderTabs(); } }, 200));
+  w.append(i, e);
+  return w;
+}
+function renderTabs() {
+  const ex = $('explorer'), f0 = metaOf(cur), dirs = allFolders(), names = allNames();
+  ex.innerHTML = '';
+  function folderRow(d, depth) {
+    if (renaming === d) return renameRow(d, true, depth);
+    const row = document.createElement('div'), b = document.createElement('button'), isOpen = open.has(d);
+    row.className = 'frow' + (selDir === d ? ' sel' : '');
+    b.className = 'fitem'; b.style.paddingLeft = (14 + depth * 14) + 'px';
+    b.innerHTML = '<img class="ficon" alt="" src="' + ICON_URI[isOpen ? 'folderOpen' : 'folder'] + '"><span>' + esc(baseOf(d)) + '</span>';
+    b.setAttribute('aria-expanded', isOpen);
+    b.onclick = () => { if (open.has(d)) open.delete(d); else open.add(d); selDir = d; renderTabs(); };
+    row.appendChild(b);
+    const acts = document.createElement('div'); acts.className = 'acts';
+    acts.append(actBtn('', 'Rename ' + d, PEN, () => { renaming = d; renderTabs(); }),
+      actBtn('del', 'Delete ' + d, TRASH, () => ask('Delete folder ' + d + '?', 'This deletes the folder and every file inside it. You can use Undo delete right afterwards.', 'Yes, delete', () => deletePath(d, true))));
+    row.appendChild(acts);
+    return row;
+  }
+  function fileRow(n, depth) {
+    const f = metaOf(n);
+    if (renaming === n) return renameRow(n, false, depth);
+    const row = document.createElement('div'), b = document.createElement('button');
+    row.className = 'frow' + (n === cur ? ' cur' : '');
+    b.className = 'fitem' + (n === cur ? ' on' : ''); b.style.paddingLeft = (14 + depth * 14) + 'px';
+    b.innerHTML = icon(n) + '<span>' + esc(baseOf(n)) + '</span>' + (f.editable ? '' : '<span class="ro">read-only</span>');
+    b.onclick = () => showFile(n);
+    row.appendChild(b);
+    if (n === mainName) row.insertAdjacentHTML('beforeend', '<span class="runmark" title="This file runs when you press Run">' + PLAY + '</span>');
+    const acts = document.createElement('div'); acts.className = 'acts';
+    if (n.endsWith('.php') && n !== mainName) acts.appendChild(actBtn('', 'Run this file instead', PLAY, () => setMain(n)));
+    if (f.custom) {
+      acts.appendChild(actBtn('', 'Rename ' + n, PEN, () => { renaming = n; renderTabs(); }));
+      acts.appendChild(actBtn('del', 'Delete ' + n, TRASH, () => ask('Delete ' + n + '?', 'This deletes ' + n + ' and everything written in it. You can use Undo delete right afterwards. Any include or require of this file will stop working.', 'Yes, delete', () => deletePath(n, false))));
+    }
+    row.appendChild(acts);
+    return row;
+  }
+  (function renderDir(dir, depth) {
+    dirs.filter(d => dirOf(d) === dir).forEach(d => { ex.appendChild(folderRow(d, depth)); if (open.has(d)) renderDir(d, depth + 1); });
+    names.filter(n => dirOf(n) === dir).forEach(n => ex.appendChild(fileRow(n, depth)));
+  })('', 0);
+  const rn = ex.querySelector('.rn');
+  if (rn) { rn.focus(); const dot = rn.value.lastIndexOf('.'); rn.setSelectionRange(rn.value.lastIndexOf('/') + 1, dot > 0 ? dot : rn.value.length); }
+  $('filetabs').innerHTML = '<div class="ftab">' + icon(cur) + '<span>' + esc(cur) + '</span></div>' +
+    (f0.editable ? '' : '<span class="note">You do not need to edit this file</span>');
+  $('run').title = 'Runs ' + mainName + ' (Ctrl+Enter)';
+}
+function view(v) {
+  $('vPrev').className = v === 'prev' ? 'on' : ''; $('vOut').className = v === 'out' ? 'on' : '';
+  $('frame').hidden = v !== 'prev'; $('out').hidden = v !== 'out';
+}
+
+function loadQuestion() {
+  clearUndo();
+  const q = QUESTIONS[key];
+  $('title').textContent = q.title; document.title = q.title;
+  docs = {};
+  q.files.forEach(f => {
+    docs[f.name] = CodeMirror.Doc(load('f:' + key + ':' + f.name) ?? f.code, modeOf(f.name));
+  });
+  const list = k => { try { const v = JSON.parse(load(k + ':' + key) || '[]'); return Array.isArray(v) ? v.filter(x => typeof x === 'string') : []; } catch (e) { return []; } };
+  custom = list('custom').filter(n => !q.files.some(f => f.name === n)); folders = list('folders');
+  custom.forEach(n => { docs[n] = CodeMirror.Doc(load('f:' + key + ':' + n) ?? blankOf(n), modeOf(n)); });
+  open = new Set(allFolders()); selDir = ''; renaming = null; trash = []; updTrash();
+  const savedMain = load('main:' + key);
+  mainName = savedMain && docs[savedMain] && savedMain.endsWith('.php') ? savedMain : defaultMain();
+  $('newRow').hidden = true;
+  showFile(q.files.find(f => f.editable).name);
+  $('stdinbox').hidden = q.stdin === undefined;
+  $('stdin').value = load('stdin:' + key) ?? (q.stdin || '');
+  $('vPrev').hidden = !q.preview;
+  shown = 0; $('hints').style.display = 'none'; $('hints').innerHTML = '';
+  const hb = $('hint'); hb.hidden = !q.hints?.length; hb.disabled = false;
+  hb.textContent = 'Show hint (0/' + (q.hints?.length || 0) + ')';
+  $('out').innerHTML = '<span class="m">Press Run to see your result here.</span>';
+  $('frame').srcdoc = '<p style="font:14px system-ui;color:#777;padding:16px">Press Run to see your page here.</p>';
+  view(q.preview ? 'prev' : 'out');
+  req = { m: 'get', d: {} };
+}
+
+if (!params.get('q')) {
+  const p = $('picker'); p.hidden = false;
+  for (const k in QUESTIONS) p.add(new Option(QUESTIONS[k].title, k));
+  p.value = key; p.onchange = () => { key = p.value; loadQuestion(); };
+}
+
+function updHist() { const h = cm.historySize(); $('undo').disabled = !h.undo; $('redo').disabled = !h.redo; }
+$('undo').onclick = () => { cm.undo(); cm.focus(); };
+$('redo').onclick = () => { cm.redo(); cm.focus(); };
+cm.on('swapDoc', updHist);
+cm.on('change', () => { updHist(); clearUndo(); if (cur) store('f:' + key + ':' + cur, cm.getValue()); });
+$('stdin').addEventListener('input', e => { clearUndo(); store('stdin:' + key, e.target.value); });
+$('vPrev').onclick = () => view('prev'); $('vOut').onclick = () => view('out');
+
+let undoSnap = null, onYes = null, lastFocus = null;
+const clearUndo = () => { undoSnap = null; $('undoReset').hidden = true; };
+function ask(title, body, yesText, fn) {
+  lastFocus = document.activeElement; onYes = fn;
+  $('dlgT').textContent = title; $('dlgB').textContent = body; $('yes').textContent = yesText;
+  $('veil').hidden = false; $('no').focus();
+}
+const closeDlg = () => { $('veil').hidden = true; onYes = null; if (lastFocus && lastFocus.isConnected) lastFocus.focus(); };
+
+$('reset').onclick = () => ask('Reset all code?',
+  'This replaces the starter files with the original code and deletes any files and folders you created. You can use Undo reset right afterwards if you change your mind.',
+  'Yes, reset everything', doReset);
+$('no').onclick = closeDlg;
+$('yes').onclick = () => { const fn = onYes; $('veil').hidden = true; onYes = null; if (fn) fn(); };
+$('veil').addEventListener('mousedown', e => { if (e.target === $('veil')) closeDlg(); });
+document.addEventListener('keydown', e => {
+  if ($('veil').hidden) return;
+  if (e.key === 'Escape') closeDlg();
+  if (e.key === 'Tab') { e.preventDefault(); ($('no').matches(':focus') ? $('yes') : $('no')).focus(); } // keep focus inside the dialog
+});
+
+function doReset() {
+  const snap = { files: {}, custom: custom.slice(), folders: folders.slice(), main: mainName, stdin: $('stdin').value };
+  allNames().forEach(n => { snap.files[n] = docs[n].getValue(); store('f:' + key + ':' + n); });
+  ['stdin', 'custom', 'folders', 'main'].forEach(k => store(k + ':' + key));
+  loadQuestion();
+  undoSnap = snap; $('undoReset').hidden = false;
+}
+$('undoReset').onclick = () => {
+  if (!undoSnap) return;
+  const snap = undoSnap; clearUndo();
+  custom = snap.custom.slice(); folders = snap.folders.slice(); saveCustom();
+  allNames().forEach(n => {
+    const v = snap.files[n];
+    if (docs[n]) docs[n].setValue(v); else docs[n] = CodeMirror.Doc(v, modeOf(n));
+    store('f:' + key + ':' + n, v);
+  });
+  open = new Set(allFolders());
+  if (docs[snap.main]) setMain(snap.main, false);
+  $('stdin').value = snap.stdin; store('stdin:' + key, snap.stdin);
+  showFile(cur);
+};
+$('undoDelete').onclick = undoDelete;
+
+// New file / new folder: the two buttons in the Files panel
+function openNew(mode) {
+  newMode = mode; const i = $('newName');
+  $('newRow').hidden = false; $('newErr').textContent = '';
+  i.placeholder = mode === 'file' ? 'helpers.php' : 'includes';
+  i.value = selDir ? selDir + '/' : ''; i.focus(); i.setSelectionRange(i.value.length, i.value.length);
+}
+$('newFile').onclick = () => openNew('file');
+$('newFolder').onclick = () => openNew('folder');
+$('newName').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { const err = (newMode === 'file' ? createFile : createFolder)($('newName').value); if (err) $('newErr').textContent = err; else $('newRow').hidden = true; }
+  else if (e.key === 'Escape') $('newRow').hidden = true;
+});
+$('newName').addEventListener('input', () => { $('newErr').textContent = ''; });
+$('newName').addEventListener('blur', () => setTimeout(() => { $('newRow').hidden = true; }, 200));
+
+$('hint').onclick = () => {
+  const h = QUESTIONS[key].hints;
+  if (shown >= h.length) return;
+  const p = document.createElement('p');
+  p.textContent = 'Hint ' + (shown + 1) + ': ' + h[shown++];
+  $('hints').appendChild(p); $('hints').style.display = 'block';
+  $('hint').textContent = shown < h.length ? 'Show hint (' + shown + '/' + h.length + ')' : 'All hints shown';
+  $('hint').disabled = shown >= h.length;
+};
+
+async function run() {
+  const btn = $('run'), q = QUESTIONS[key];
+  if (btn.disabled) return;
+  btn.disabled = true; btn.textContent = 'Running…';
+  let text = '', errs = '';
+  try {
+    const main = mainName;
+    await phpReady;
+    if (!PhpWeb) throw new Error('The PHP engine could not be loaded (' + (window.__phpErr || 'unknown error') + '). Check your connection or that cdn.jsdelivr.net is allowed.');
+    const php = new PhpWeb();
+    php.addEventListener('output', e => { text += [].concat(e.detail).join(''); });
+    php.addEventListener('error', e => { errs += [].concat(e.detail).join(''); });
+    for (const d of allFolders()) { try { await php.mkdir('/' + d); } catch (e) {} }
+    for (const n of allNames()) await php.writeFile('/' + n, n.endsWith('.php') ? fix(docs[n].getValue()) : docs[n].getValue());
+    await php.run(wrap(docs[main].getValue(), $('stdin').value, req));
+  } catch (err) { errs += String(err && err.message || err); }
+  $('out').innerHTML = esc(text) + (errs ? '<span class="e">' + (text ? '\n' : '') + esc(errs) + '</span>' : '') ||
+    '<span class="m">(no output)</span>';
+  if (q.preview) {
+    $('frame').srcdoc = inline(text, allNames(), docs) + BRIDGE;
+    view(errs ? 'out' : 'prev');
+  }
+  btn.disabled = false; btn.textContent = 'Run (Ctrl+Enter)';
+}
+function runFresh() { req = { m: 'get', d: {} }; run(); }
+
+window.addEventListener('message', e => {
+  if (e.source !== $('frame').contentWindow || !e.data || !e.data.fp) return;
+  req = { m: e.data.m, d: e.data.d }; run();
+});
+$('run').onclick = runFresh;
+loadQuestion();
+</script>
