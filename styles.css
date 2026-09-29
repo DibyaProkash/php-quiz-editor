@@ -77,13 +77,17 @@ main{flex:1;display:grid;grid-template-columns:210px 1fr 1fr;min-height:0}
 
 /* Autocomplete ("intellisense") popup - dark theme to match the editor, plus
    category coloring: keywords, built-in functions, and $variables each get their own tint. */
-.CodeMirror-hints{background:#26282c;border:1px solid var(--line);border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.45);font:13px ui-monospace,Menlo,Consolas,monospace;padding:4px 0}
+.CodeMirror-hints{background:#26282c;border:1px solid var(--line);border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.45);font:13px ui-monospace,Menlo,Consolas,monospace;padding:4px 0;max-width:420px}
 .CodeMirror-hint{color:var(--text);padding:4px 12px}
 li.CodeMirror-hint-active{background:var(--accent);color:#fff}
 .cm-hint-kw{color:#c586c0}
 .cm-hint-fn{color:#dcdcaa}
 .cm-hint-var{color:#4fc1ff}
 li.CodeMirror-hint-active.cm-hint-kw,li.CodeMirror-hint-active.cm-hint-fn,li.CodeMirror-hint-active.cm-hint-var{color:#fff}
+.cm-hint-row{display:flex;align-items:baseline;gap:10px;white-space:nowrap}
+.cm-hint-name{flex:0 0 auto;font-weight:600}
+.cm-hint-doc{flex:1 1 auto;color:var(--muted);font:11px ui-sans-serif,system-ui,sans-serif;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+li.CodeMirror-hint-active .cm-hint-doc{color:#e8e8e8}
 
 .explorer{background:var(--panel);border-right:1px solid var(--line);overflow:auto;min-width:0}
 .explorer h2{margin:0;padding:8px 14px;font-size:12px;font-weight:600;color:var(--muted)}

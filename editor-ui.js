@@ -1,7 +1,42 @@
+// VS Code's Ctrl+/ (toggle line comment): comments out every non-blank line in the
+// selection with '//', or uncomments them if they're already all commented. Comments
+// only apply to editable files - CSS's read-only style.css never needs this, but the
+// check is (ext === 'css') below in case a student ever adds their own .css file.
+function toggleLineComment(cmInst) {
+  const ext = cur.split('.').pop();
+  const marker = ext === 'css' ? null : '// ';
+  const from = cmInst.getCursor('from'), to = cmInst.getCursor('to');
+  const lastLine = (to.ch === 0 && to.line > from.line) ? to.line - 1 : to.line;
+  if (!marker) return; // (block-comment toggling for CSS isn't needed by this app; skip rather than mangle)
+  let allCommented = true;
+  for (let l = from.line; l <= lastLine; l++) {
+    const text = cmInst.getLine(l);
+    if (text.trim() !== '' && !/^\s*\/\//.test(text)) { allCommented = false; break; }
+  }
+  cmInst.operation(() => {
+    for (let l = from.line; l <= lastLine; l++) {
+      const text = cmInst.getLine(l);
+      if (allCommented) {
+        const m = /^(\s*)\/\/ ?/.exec(text);
+        if (m) cmInst.replaceRange('', CodeMirror.Pos(l, m[1].length), CodeMirror.Pos(l, m[0].length));
+      } else {
+        if (text.trim() === '') continue; // leave blank lines blank
+        const indent = /^\s*/.exec(text)[0];
+        cmInst.replaceRange(marker, CodeMirror.Pos(l, indent.length));
+      }
+    }
+  });
+}
+
 const cm = CodeMirror.fromTextArea($('code'), {
   theme: 'material-darker', lineNumbers: true, matchBrackets: true, autoCloseBrackets: true,
   indentUnit: 4, indentWithTabs: false, undoDepth: 1000, historyEventDelay: 400,
-  extraKeys: { 'Ctrl-Enter': () => runFresh(), 'Cmd-Enter': () => runFresh(), Tab: c => c.replaceSelection('    ') }
+  extraKeys: {
+    'Ctrl-Enter': () => runFresh(), 'Cmd-Enter': () => runFresh(), Tab: c => c.replaceSelection('    '),
+    'Ctrl-Space': c => CodeMirror.showHint(c, phpHint, { completeSingle: false }),
+    'Shift-Alt-F': () => formatCurrentFile(),
+    'Ctrl-/': toggleLineComment, 'Cmd-/': toggleLineComment
+  }
 });
 
 function renameRow(path, isFolder, depth) {
@@ -101,7 +136,7 @@ function loadQuestion() {
   $('frame').srcdoc = '<p style="font:14px system-ui;color:#777;padding:16px">Press Run to see your page here.</p>';
   const tests = q.tests || [];
   $('vTests').hidden = !tests.length;
-  $('runTests').textContent = 'Run tests (' + tests.length + ')'; $('runTests').disabled = false;
+  $('runTests').innerHTML = BEAKER + ' Run tests (' + tests.length + ')'; $('runTests').disabled = false;
   $('testResults').innerHTML = '';
   const funcs = q.functions || [];
   $('funcsSection').hidden = !funcs.length;
