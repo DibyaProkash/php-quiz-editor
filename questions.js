@@ -48,6 +48,43 @@ const QUESTIONS = {
       'Use number_format($value, 2) when you display each dollar amount.'
     ],
     files: [
+      { name: 'README.md', editable: false, code: `# Part 1 – Variables, Expressions, and Conditionals
+
+## Goal
+Finish \`index.php\` so the Student Café order form correctly calculates and displays the total cost of an order.
+
+## Rules for this part
+- Use **plain variables and expressions only** - no functions and no arrays in Part 1 (that comes in Parts 2 and 3).
+- The three item prices are already set for you:
+
+  | Item | Price |
+  |---|---|
+  | Sandwich | \`$8.50\` |
+  | Drink | \`$2.50\` |
+  | Dessert | \`$4.00\` |
+
+## What to build
+When the form is submitted, fill in the \`// TODO\` sections so the page calculates, in order:
+
+1. \`$sandwichCost\`, \`$drinkCost\`, and \`$dessertCost\` - each quantity times its price.
+2. \`$subtotal\` - the three costs added together.
+3. \`$discount\` - **10%** of the subtotal, but only when the subtotal is **$30 or more**; otherwise \`$0\`. Use \`if\`/\`else\`.
+4. \`$tax\` - **5%** of the subtotal *after* the discount has been subtracted.
+5. \`$final\` - the subtotal, minus the discount, plus the tax.
+
+Then echo each amount into its matching table cell, using \`number_format($value, 2)\` so every dollar amount always shows two decimal places.
+
+## Testing your code
+Open the **Tests** tab on the right and click **Run tests**. Your code is checked against the real PHP interpreter with a few different orders, and the final amount is compared to the expected total.
+
+## Files in this project
+| File | Can I edit it? |
+|---|---|
+| \`index.php\` | ✅ Yes - this is the only file you need to change |
+| \`style.css\` | 🔒 Read-only - provided styling |
+| \`script.js\` | 🔒 Read-only - a small helper script |
+| \`README.md\` | 🔒 Read-only - this file |
+` },
       { name: 'index.php', editable: true, code: `<?php
 // Part 1 - Variables, Expressions, and Conditionals
 // Do not use functions or arrays in this part.
@@ -145,6 +182,46 @@ button{margin-top:6px;padding:8px 16px;background:#7a3b1d;color:#fff;border:0;bo
       'Call each function and store its return value, e.g. $subtotal = calculateSubtotal($sandwichCost, $drinkCost, $dessertCost);'
     ],
     files: [
+      { name: 'README.md', editable: false, code: `# Part 2 – Refactor Using Functions
+
+## Goal
+Take the same Café order calculation from Part 1 and rebuild it using **functions**, so the calculation logic is defined once and reused.
+
+## What to build
+Three functions are already declared at the top of \`index.php\`, each with a \`// TODO\` for its body:
+
+1. \`calculateSubtotal(float $sandwichCost, float $drinkCost, float $dessertCost): float\`
+   Return the sum of the three item costs.
+2. \`calculateDiscount(float $subtotal): float\`
+   Return **10%** of \`$subtotal\` when it is **$30 or more**, otherwise return \`0\`.
+3. \`calculateTax(float $amountAfterDiscount): float\`
+   Return **5%** of the amount passed in.
+
+Then, further down, call each function and store its return value:
+
+\`\`\`php
+$subtotal = calculateSubtotal($sandwichCost, $drinkCost, $dessertCost);
+$discount = calculateDiscount($subtotal);
+$tax      = calculateTax($subtotal - $discount);
+$final    = $subtotal - $discount + $tax;
+\`\`\`
+
+Finally, echo each amount into its table cell with \`number_format($value, 2)\`, exactly as in Part 1.
+
+## Why functions?
+Functions let you name a calculation once and reuse it - and they make each piece of logic easy to test on its own. The item costs (\`$sandwichCost\`, etc.) are still calculated directly with variables; only the subtotal/discount/tax steps move into functions.
+
+## Testing your code
+Open the **Tests** tab and click **Run tests** - the same 3 official test orders from Part 1 are used to check your final amount.
+
+## Files in this project
+| File | Can I edit it? |
+|---|---|
+| \`index.php\` | ✅ Yes - this is the only file you need to change |
+| \`style.css\` | 🔒 Read-only - provided styling |
+| \`script.js\` | 🔒 Read-only - a small helper script |
+| \`README.md\` | 🔒 Read-only - this file |
+` },
       { name: 'index.php', editable: true, code: `<?php
 // Part 2 - Refactor Using Functions
 
@@ -251,6 +328,46 @@ button{margin-top:6px;padding:8px 16px;background:#2d6a4f;color:#fff;border:0;bo
       'You can read a specific cost back out for display with $costs["sandwich"], $costs["drink"] and $costs["dessert"].'
     ],
     files: [
+      { name: 'README.md', editable: false, code: `# Part 3 – Refactor Using Associative Arrays
+
+## Goal
+Rebuild the Café order calculation once more, this time storing the prices, quantities, and item costs in **associative arrays** instead of separate variables for each item.
+
+## What's already there
+\`$prices\` is an associative array mapping each item name to its price:
+
+\`\`\`php
+$prices = [
+    "sandwich" => 8.50,
+    "drink"    => 2.50,
+    "dessert"  => 4.00,
+];
+\`\`\`
+
+\`$quantities\` is built the same way from the submitted form values, and an empty \`$costs = [];\` array is ready for you to fill in.
+
+## What to build
+1. Loop over \`$prices\` with \`foreach ($prices as $item => $price)\` and set \`$costs[$item] = $price * $quantities[$item];\` for each item.
+2. Calculate \`$subtotal\` from \`$costs\` - try the built-in \`array_sum()\` function instead of adding the three values by hand.
+3. Calculate \`$discount\` (**10%** when the subtotal is **$30 or more**, otherwise \`0\`) and \`$tax\` (**5%** of the subtotal after the discount) - same rules as Parts 1 and 2.
+4. Calculate \`$final\`.
+
+Then echo each amount into its table cell. You can read an individual item's cost back out of the array, e.g. \`$costs['sandwich']\`, \`$costs['drink']\`, \`$costs['dessert']\`. Use \`number_format($value, 2)\` for every dollar amount, as before.
+
+## Why arrays?
+Arrays let this scale to any number of menu items without adding a new variable (and a new line of near-identical code) for each one - the same \`foreach\` loop handles all of them.
+
+## Testing your code
+Open the **Tests** tab and click **Run tests** - the same 3 official test orders are used to check your final amount.
+
+## Files in this project
+| File | Can I edit it? |
+|---|---|
+| \`index.php\` | ✅ Yes - this is the only file you need to change |
+| \`style.css\` | 🔒 Read-only - provided styling |
+| \`script.js\` | 🔒 Read-only - a small helper script |
+| \`README.md\` | 🔒 Read-only - this file |
+` },
       { name: 'index.php', editable: true, code: `<?php
 // Part 3 - Refactor Using Associative Arrays
 

@@ -38,6 +38,12 @@ const cm = CodeMirror.fromTextArea($('code'), {
     'Ctrl-/': toggleLineComment, 'Cmd-/': toggleLineComment
   }
 });
+// Screen readers otherwise announce CodeMirror's hidden input with no name at all.
+cm.getInputField().setAttribute('aria-label', 'Code editor');
+// The "Skip to code editor" link targets the original <textarea>, which CodeMirror
+// hides and replaces with its own focusable widget - so jump straight to that instead.
+const skipLink = document.querySelector('.skipLink');
+if (skipLink) skipLink.addEventListener('click', e => { e.preventDefault(); cm.focus(); });
 
 function renameRow(path, isFolder, depth) {
   const w = document.createElement('div'), i = document.createElement('input'), e = document.createElement('div');
@@ -129,7 +135,10 @@ function loadQuestion() {
   $('stdinbox').hidden = q.stdin === undefined;
   $('stdin').value = load('stdin:' + key) ?? (q.stdin || '');
   $('vPrev').hidden = !q.preview;
-  shown = 0; $('hints').style.display = 'none'; $('hints').innerHTML = '';
+  shown = 0; $('hints').innerHTML = ''; $('hints').hidden = true;
+  $('hintsSection').hidden = !q.hints?.length;
+  $('hintsToggle').setAttribute('aria-expanded', 'false');
+  $('hintsToggleLabel').textContent = 'Hints';
   const hb = $('hint'); hb.hidden = !q.hints?.length; hb.disabled = false;
   hb.textContent = 'Show hint (0/' + (q.hints?.length || 0) + ')';
   $('out').innerHTML = '<span class="m">Press Run to see your result here.</span>';
@@ -141,7 +150,7 @@ function loadQuestion() {
   const funcs = q.functions || [];
   $('funcsSection').hidden = !funcs.length;
   $('funcsPanel').hidden = true; $('funcsBtn').setAttribute('aria-expanded', 'false');
-  $('funcsBtn').textContent = 'PHP function reference (' + funcs.length + ')';
+  $('funcsBtnLabel').textContent = 'PHP function reference (' + funcs.length + ')';
   renderFuncs(funcs);
   view(q.preview ? 'prev' : 'out');
   req = { m: 'get', d: {} };
@@ -230,7 +239,20 @@ $('hint').onclick = () => {
   if (shown >= h.length) return;
   const p = document.createElement('p');
   p.textContent = 'Hint ' + (shown + 1) + ': ' + h[shown++];
-  $('hints').appendChild(p); $('hints').style.display = 'block';
+  $('hints').appendChild(p);
+  // Revealing a hint always opens the accordion so the student can see what
+  // was just added, even if they'd previously collapsed it.
+  $('hints').hidden = false;
+  $('hintsToggle').setAttribute('aria-expanded', 'true');
+  $('hintsToggleLabel').textContent = 'Hints (' + shown + ' of ' + h.length + ')';
   $('hint').textContent = shown < h.length ? 'Show hint (' + shown + '/' + h.length + ')' : 'All hints shown';
   $('hint').disabled = shown >= h.length;
+};
+
+// The accordion header can also be clicked on its own, independent of revealing
+// a new hint - so a student can collapse it out of the way and reopen it later
+// to re-read hints already shown, without that click revealing anything new.
+$('hintsToggle').onclick = () => {
+  const opening = $('hints').hidden;
+  $('hints').hidden = !opening; $('hintsToggle').setAttribute('aria-expanded', String(opening));
 };

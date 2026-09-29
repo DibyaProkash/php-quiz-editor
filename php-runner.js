@@ -16,6 +16,21 @@ const BRIDGE = '<script>document.addEventListener("submit",function(e){e.prevent
   'document.addEventListener("click",function(e){var a=e.target.closest&&e.target.closest("a[href]");' +
   'if(a&&a.getAttribute("href").charAt(0)!=="#")e.preventDefault()},true)<\/script>';
 
+// The Preview iframe (#frame) is its own separate document, so the page-wide zoom
+// control (theme.js) - which scales the rest of the UI via CSS `zoom` on <body> - has
+// no effect on what's rendered inside it; an ancestor's `zoom` does not cross into an
+// iframe's own document. Without this, zooming in for readability would leave the
+// live PHP page preview stuck at 100%, the one part of the screen that didn't grow.
+// zoomPct is theme.js's global (loaded before this file) - default to 100% if it's
+// somehow unavailable, so a preview is never silently skipped.
+function injectZoomStyle(html, scale) {
+  if (scale === 1) return html;
+  const tag = '<style>html{zoom:' + scale + '}</style>';
+  if (/<head[^>]*>/i.test(html)) return html.replace(/<head[^>]*>/i, m => m + tag);
+  if (/<html[^>]*>/i.test(html)) return html.replace(/<html[^>]*>/i, m => m + tag);
+  return tag + html; // a fragment with no <html>/<head> tag - a stray <style> still applies
+}
+
 function inline(html) {
   allNames().forEach(name => {
     const f = { name };
@@ -82,7 +97,8 @@ async function run() {
   $('out').innerHTML = (flagged ? '<span class="e">' + esc(text) + (errs ? '\n' + esc(errs) : '') + '</span>' : esc(text)) ||
     '<span class="m">(no output)</span>';
   if (q.preview) {
-    $('frame').srcdoc = inline(text) + BRIDGE;
+    const previewScale = (typeof zoomPct !== 'undefined' ? zoomPct : 100) / 100;
+    $('frame').srcdoc = injectZoomStyle(inline(text) + BRIDGE, previewScale);
     view(flagged ? 'out' : 'prev');
   }
   engineBusy = false; btn.disabled = false; btn.textContent = 'Run (Ctrl+Enter)'; tbtn.disabled = !QUESTIONS[key].tests?.length;

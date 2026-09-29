@@ -3,8 +3,8 @@ const params = new URLSearchParams(location.search);
 let key = QUESTIONS[params.get('q')] ? params.get('q') : (params.get('q') ? 'blank' : 'part1');
 let docs = {}, custom = [], folders = [], open = new Set(), selDir = '', renaming = null, newMode = 'file', mainName = '', trash = [], cur = '', shown = 0, req = { m: 'get', d: {} };
 
-const MODES = { php: 'application/x-httpd-php', css: 'css', js: 'javascript', html: 'htmlmixed', json: 'application/json', txt: 'text/plain' };
-const ALLOWED = ['php', 'css', 'js', 'html', 'txt', 'json'], MAX_CUSTOM = 15, MAX_FOLDERS = 8;
+const MODES = { php: 'application/x-httpd-php', css: 'css', js: 'javascript', html: 'htmlmixed', json: 'application/json', txt: 'text/plain', md: 'text/plain' };
+const ALLOWED = ['php', 'css', 'js', 'html', 'txt', 'json', 'md'], MAX_CUSTOM = 15, MAX_FOLDERS = 8;
 const modeOf = n => MODES[n.split('.').pop()] || 'text/plain';
 
 const store = (k, v) => { try { v === undefined ? sessionStorage.removeItem(k) : sessionStorage.setItem(k, v); } catch (e) {} };
@@ -42,6 +42,7 @@ function showFile(name) {
   cm.setOption('readOnly', metaOf(name).editable ? false : 'nocursor');
   $('format').disabled = !(metaOf(name).editable && name.endsWith('.php'));
   $('formatMsg').hidden = true;
+  applyFileView(name);
   renderTabs();
 }
 // Returns an error message, or '' when the path is fine. `ignore` = the item being renamed.
@@ -55,7 +56,7 @@ function checkPath(path, isFolder, ignore) {
   }
   if (!isFolder) {
     const b = baseOf(path);
-    if (!b.includes('.') || !ALLOWED.includes(b.split('.').pop().toLowerCase())) return 'The name must end in .php, .css, .js, .html, .txt or .json';
+    if (!b.includes('.') || !ALLOWED.includes(b.split('.').pop().toLowerCase())) return 'The name must end in .php, .css, .js, .html, .txt, .json or .md';
   }
   const inIgnored = n => ignore && (n === ignore || n.startsWith(ignore + '/'));
   const files = allNames().filter(n => !inIgnored(n)), dirs = allFolders().filter(d => !inIgnored(d)), low = path.toLowerCase();

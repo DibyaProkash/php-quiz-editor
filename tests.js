@@ -10,10 +10,11 @@ async function runOneTest(t) {
   await phpReady;
   if (!PhpWeb) return { ok: false, actual: null, diag: 'The PHP engine could not be loaded.' };
   try {
+    sinkText = ''; sinkErrs = ''; // reset before anything can throw, so a failed getPhp()/mkdir/writeFile
+                                   // never leaves a PREVIOUS run's leftover output sitting in the sinks
     const engine = await getPhp();
     for (const d of allFolders()) { try { await engine.mkdir('/' + d); } catch (e) {} }
     for (const n of allNames()) await engine.writeFile('/' + n, n.endsWith('.php') ? fix(docs[n].getValue()) : docs[n].getValue());
-    sinkText = ''; sinkErrs = '';
     await engine.run(wrap(docs[main].getValue(), '', { m: 'post', d: t.input }));
   } catch (err) {
     sinkErrs += String(err && err.message || err);
