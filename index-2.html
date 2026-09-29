@@ -1,0 +1,891 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PHP Editor</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css">
+<style>
+:root{--bg:#1e1f22;--panel:#252629;--line:#3a3c40;--text:#d4d4d4;--muted:#8b8f96;--accent:#4f8cff;--err:#f0716b}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font:14px system-ui,-apple-system,"Segoe UI",sans-serif}
+body{display:flex;flex-direction:column}
+header{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--panel);border-bottom:1px solid var(--line)}
+header h1{font-size:14px;font-weight:600;margin:0 auto 0 0}
+select,button{font:inherit;color:var(--text);background:#333539;border:1px solid var(--line);border-radius:4px;padding:6px 12px;cursor:pointer}
+button:hover:not(:disabled){background:#3d4046}
+button:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+#run{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+#run:disabled{opacity:.6;cursor:wait}
+main{flex:1;display:grid;grid-template-columns:210px 1fr 1fr;min-height:0}
+.editor,.side{min-width:0;min-height:0;display:flex;flex-direction:column}
+.editor{border-right:1px solid var(--line)}
+.bar{display:flex;background:var(--panel);border-bottom:1px solid var(--line);min-height:33px;align-items:stretch}
+.bar button{border:0;border-right:1px solid var(--line);border-radius:0;background:transparent;color:var(--muted);padding:6px 14px;font-size:13px}
+.bar button.on{color:var(--text);background:var(--bg);box-shadow:inset 0 -2px 0 var(--accent)}
+.bar .note{margin-left:auto;align-self:center;padding:0 12px;color:var(--muted);font-size:12px}
+.CodeMirror{flex:1;height:auto;font:14px/1.5 ui-monospace,Menlo,Consolas,monospace}
+#frame{flex:1;width:100%;border:0;background:#fff}
+#out{flex:1;margin:0;padding:10px 14px;overflow:auto;white-space:pre-wrap;word-break:break-word;font:14px/1.5 ui-monospace,Menlo,Consolas,monospace}
+#out .e{color:var(--err)} .m{color:var(--muted)}
+#stdinbox{border-top:1px solid var(--line)}
+#stdinbox h2{margin:0;padding:6px 14px;font-size:13px;font-weight:500;color:var(--muted);background:var(--panel)}
+#stdin{display:block;height:90px;resize:vertical;width:100%;background:var(--bg);color:var(--text);border:0;padding:10px 14px;font:14px ui-monospace,Menlo,Consolas,monospace}
+#hints{display:none;padding:10px 14px;background:#2b2d31;border-top:1px solid var(--line);max-height:30%;overflow:auto}
+#hints p{margin:0 0 8px}
+#filetabs{display:flex;flex:1;min-width:0;align-items:stretch;overflow-x:auto}
+.tools{display:flex;border-left:1px solid var(--line)}
+.tools button{display:flex;align-items:center;padding:6px 12px}
+.tools button:disabled{opacity:.35;cursor:default}
+
+.explorer{background:var(--panel);border-right:1px solid var(--line);overflow:auto;min-width:0}
+.explorer h2{margin:0;padding:8px 14px;font-size:12px;font-weight:600;color:var(--muted)}
+.explorer .list{display:flex;flex-direction:column}
+.etools{display:flex}
+.frow.sel>.fitem:not(.on){background:#2b3040}
+.acts{display:flex;opacity:0}
+.frow:hover .acts,.frow:focus-within .acts,.frow.cur .acts{opacity:1}
+@media(hover:none){.acts{opacity:.8}}
+.acts button{display:flex;border:0;border-radius:0;background:transparent;color:var(--muted);padding:4px 5px}
+.acts button:hover,.acts button:focus-visible{color:var(--text)}
+.acts .del:hover,.acts .del:focus-visible{color:var(--err)}
+.runmark{display:flex;padding:4px 6px;color:#5fb878}
+.rnwrap{padding:3px 10px 6px}
+.rn{width:100%;background:var(--bg);color:var(--text);border:1px solid var(--accent);border-radius:3px;padding:3px 6px;font:13px system-ui,sans-serif}
+.rnerr{color:var(--err);font-size:12px;padding-top:3px}
+.ehead{display:flex;align-items:center;justify-content:space-between;padding-right:6px}
+.ehead button{display:flex;border:0;background:transparent;padding:4px 6px;color:var(--muted)}
+.ehead button:hover{color:var(--text)}
+#newRow{padding:4px 10px 8px}
+#newName{width:100%;background:var(--bg);color:var(--text);border:1px solid var(--accent);border-radius:3px;padding:4px 6px;font:13px system-ui,sans-serif}
+#newErr{color:var(--err);font-size:12px;padding-top:4px}
+.frow{display:flex;align-items:center}
+.frow .fitem{flex:1;min-width:0}
+.fdel{display:flex;border:0;background:transparent;color:var(--muted);padding:4px 8px;opacity:.6}
+.fdel:hover,.fdel:focus-visible{opacity:1;color:var(--err)}
+.fitem{display:flex;align-items:center;gap:8px;width:100%;text-align:left;border:0;border-radius:0;background:transparent;padding:5px 14px;font-size:13px;color:var(--text)}
+.fitem:hover{background:#2f3136}
+.fitem.on{background:#33415c}
+.fitem .ro{margin-left:auto;font-size:11px;color:var(--muted)}
+.ficon{flex:none;width:18px;height:18px;display:block}
+.ftab{display:flex;align-items:center;gap:8px;padding:6px 14px;font-size:13px;color:var(--text);background:var(--bg);box-shadow:inset 0 -2px 0 var(--accent);white-space:nowrap}
+#veil{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:10}
+#dlg{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:20px 22px;max-width:420px;width:calc(100% - 32px);box-shadow:0 10px 30px rgba(0,0,0,.5)}
+#dlg h2{margin:0 0 8px;font-size:16px}
+#dlg p{margin:0 0 18px;color:var(--muted);line-height:1.5}
+#dlg .row{display:flex;gap:10px;justify-content:flex-end}
+#yes{background:var(--err);border-color:var(--err);color:#fff;font-weight:600}
+#undoReset{border-color:var(--accent);color:var(--accent)}
+[hidden]{display:none!important}
+@media(max-width:800px){main{grid-template-columns:1fr;grid-template-rows:auto 1fr 1fr}.explorer .list{flex-direction:row;flex-wrap:wrap}.fitem{width:auto}.explorer{border-right:0;border-bottom:1px solid var(--line)}.editor{border-right:0;border-bottom:1px solid var(--line)}}
+
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title">PHP Editor</h1>
+  <select id="picker" aria-label="Question" hidden></select>
+  <button id="hint" hidden></button>
+  <button id="undoDelete" hidden>Undo delete</button>
+  <button id="undoReset" hidden>Undo reset</button>
+  <button id="reset">Reset code</button>
+  <button id="run">Run (Ctrl+Enter)</button>
+</header>
+<main>
+  <nav class="explorer" aria-label="Files"><div class="ehead"><h2>Files</h2><div class="etools"><button id="newFile" title="New file" aria-label="New file"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M12 12v6M9 15h6"/></svg></button><button id="newFolder" title="New folder" aria-label="New folder"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 11v6M9 14h6"/></svg></button></div></div><div id="newRow" hidden><input id="newName" maxlength="40" spellcheck="false" autocomplete="off" placeholder="helpers.php" aria-label="New file or folder name"><div id="newErr" role="alert"></div></div><div class="list" id="explorer"></div></nav>
+  <section class="editor">
+    <div class="bar"><div id="filetabs"></div><div class="tools"><button id="undo" title="Undo (Ctrl+Z)" aria-label="Undo" disabled><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg></button><button id="redo" title="Redo (Ctrl+Y)" aria-label="Redo" disabled><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 14 20 9 15 4"/><path d="M4 20v-7a4 4 0 0 1 4-4h12"/></svg></button></div></div>
+    <textarea id="code"></textarea>
+  </section>
+  <section class="side">
+    <div class="bar" id="viewtabs">
+      <button id="vPrev" class="on">Preview</button>
+      <button id="vOut">Output</button>
+    </div>
+    <iframe id="frame" title="Page preview" sandbox="allow-scripts allow-forms"></iframe>
+    <pre id="out" hidden></pre>
+    <div id="stdinbox" hidden><h2>Input (one value per line)</h2><textarea id="stdin" spellcheck="false" aria-label="Program input"></textarea></div>
+    <div id="hints"></div>
+  </section>
+</main>
+<div id="veil" hidden>
+  <div id="dlg" role="alertdialog" aria-modal="true" aria-labelledby="dlgT" aria-describedby="dlgB">
+    <h2 id="dlgT">Reset all code?</h2>
+    <p id="dlgB">This replaces everything you have written, in every file, with the original starter code. You can use Undo reset right afterwards if you change your mind.</p>
+    <div class="row"><button id="no">No, keep my code</button><button id="yes">Yes, reset everything</button></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/xml/xml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/css/css.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/htmlmixed/htmlmixed.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/clike/clike.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/php/php.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
+
+<script>
+let PhpWeb = null;
+const phpReady = import('https://cdn.jsdelivr.net/npm/php-wasm/PhpWeb.mjs').then(m => { PhpWeb = m.PhpWeb; }).catch(err => { window.__phpErr = String(err && err.message || err); });
+
+/* ------------------------------------------------------------------
+   QUESTIONS  (link students to  index.html?q=part1 )
+   files   : the run file is the first .php file (index.php).
+             editable:false makes a file read-only (CSS/JS you provide).
+             Other files are inlined into the preview automatically when
+             the page uses <link href="style.css"> or <script src="script.js">.
+   preview : true  = show rendered page. false = plain text output only.
+   stdin   : text for the Input box (readline()/fgets(STDIN)). Omit to hide the box.
+   hints   : optional array, revealed one at a time.
+------------------------------------------------------------------- */
+const QUESTIONS = {
+  part1: {
+    title: 'Part 1 – Variables, Expressions, and Conditionals',
+    preview: true,
+    hints: [
+      'Sandwich cost = sandwiches × 8.50. Do the same for drinks and desserts, then add all three for the subtotal.',
+      'Use if ($subtotal >= 30) { ... } else { ... } to set the 10% discount, or $0 otherwise.',
+      'Tax is 5% of the subtotal after the discount is subtracted, not before.',
+      'Use number_format($value, 2) when you display each dollar amount.'
+    ],
+    files: [
+      { name: 'index.php', editable: true, code: `<?php
+// Part 1 - Variables, Expressions, and Conditionals
+// Do not use functions or arrays in this part.
+
+$sandwichPrice = 8.50;
+$drinkPrice    = 2.50;
+$dessertPrice  = 4.00;
+
+$submitted = $_SERVER['REQUEST_METHOD'] === 'POST';
+
+if ($submitted) {
+    $sandwiches = (int) ($_POST['sandwiches'] ?? 0);
+    $drinks     = (int) ($_POST['drinks'] ?? 0);
+    $desserts   = (int) ($_POST['desserts'] ?? 0);
+
+    // TODO: calculate $sandwichCost, $drinkCost and $dessertCost
+
+
+    // TODO: calculate $subtotal
+
+
+    // TODO: use if/else to calculate $discount (10% when $subtotal is 30 or more, otherwise 0)
+
+
+    // TODO: calculate $tax (5% of the subtotal after the discount)
+
+
+    // TODO: calculate $final
+
+}
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Student Café</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="script.js" defer><\/script>
+</head>
+<body>
+  <main class="card">
+    <p class="badge">Part 1 of 3</p>
+    <h1>Student Café Order Calculator</h1>
+    <form method="post">
+      <label>Sandwiches <input type="number" name="sandwiches" min="0" value="0"></label>
+      <label>Drinks <input type="number" name="drinks" min="0" value="0"></label>
+      <label>Desserts <input type="number" name="desserts" min="0" value="0"></label>
+      <button type="submit">Calculate</button>
+    </form>
+
+    <?php if ($submitted): ?>
+    <table class="receipt">
+      <tr><th>Sandwich cost</th><td>$<?php // TODO: echo the sandwich cost ?></td></tr>
+      <tr><th>Drink cost</th><td>$<?php // TODO: echo the drink cost ?></td></tr>
+      <tr><th>Dessert cost</th><td>$<?php // TODO: echo the dessert cost ?></td></tr>
+      <tr class="subtotal"><th>Subtotal</th><td>$<?php // TODO: echo the subtotal ?></td></tr>
+      <tr><th>Discount</th><td>$<?php // TODO: echo the discount ?></td></tr>
+      <tr><th>Tax</th><td>$<?php // TODO: echo the tax ?></td></tr>
+      <tr class="total"><th>Final amount</th><td>$<?php // TODO: echo the final amount ?></td></tr>
+    </table>
+    <?php endif; ?>
+  </main>
+</body>
+</html>
+` },
+      { name: 'style.css', editable: false, code: `body{font-family:system-ui,sans-serif;background:#f3efe6;margin:0;padding:24px;color:#2b2b2b}
+.card{max-width:440px;margin:0 auto;background:#fff;padding:24px;border-radius:8px;border:1px solid #ddd}
+.badge{display:inline-block;margin:0 0 8px;padding:3px 10px;border-radius:999px;background:#f1e6db;color:#7a3b1d;font-size:12px;font-weight:600}
+h1{margin:0 0 16px;font-size:21px}
+label{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+input{width:80px;padding:6px}
+button{margin-top:6px;padding:8px 16px;background:#7a3b1d;color:#fff;border:0;border-radius:4px;cursor:pointer}
+.receipt{width:100%;margin-top:20px;border-collapse:collapse}
+.receipt th{text-align:left;font-weight:400;color:#6b6b6b}
+.receipt td{text-align:right}
+.receipt th,.receipt td{padding:6px 0;border-bottom:1px solid #eee}
+.receipt tr.subtotal th,.receipt tr.subtotal td{border-top:2px solid #ddd;font-weight:600;color:#2b2b2b}
+.receipt tr.total th,.receipt tr.total td{font-weight:700;font-size:17px;border-bottom:0}
+` },
+      { name: 'script.js', editable: false, code: `document.querySelectorAll('input[type=number]').forEach(function (el) {
+  el.addEventListener('focus', function () { el.select(); });
+});
+` }
+    ]
+  },
+  part2: {
+    title: 'Part 2 – Refactor Using Functions',
+    preview: true,
+    hints: [
+      'calculateSubtotal() takes the three item costs as parameters and returns their sum.',
+      'calculateDiscount() takes the subtotal and returns 10% of it when the subtotal is 30 or more, otherwise 0.',
+      'calculateTax() takes the amount after the discount and returns 5% of it.',
+      'Call each function and store its return value, e.g. $subtotal = calculateSubtotal($sandwichCost, $drinkCost, $dessertCost);'
+    ],
+    files: [
+      { name: 'index.php', editable: true, code: `<?php
+// Part 2 - Refactor Using Functions
+
+function calculateSubtotal(float $sandwichCost, float $drinkCost, float $dessertCost): float {
+    // TODO: return the sum of the three item costs
+}
+
+function calculateDiscount(float $subtotal): float {
+    // TODO: return 10% of $subtotal when it is 30 or more, otherwise return 0
+}
+
+function calculateTax(float $amountAfterDiscount): float {
+    // TODO: return 5% of $amountAfterDiscount
+}
+
+$sandwichPrice = 8.50;
+$drinkPrice    = 2.50;
+$dessertPrice  = 4.00;
+
+$submitted = $_SERVER['REQUEST_METHOD'] === 'POST';
+
+if ($submitted) {
+    $sandwiches = (int) ($_POST['sandwiches'] ?? 0);
+    $drinks     = (int) ($_POST['drinks'] ?? 0);
+    $desserts   = (int) ($_POST['desserts'] ?? 0);
+
+    $sandwichCost = $sandwiches * $sandwichPrice;
+    $drinkCost    = $drinks * $drinkPrice;
+    $dessertCost  = $desserts * $dessertPrice;
+
+    // TODO: $subtotal = calculateSubtotal($sandwichCost, $drinkCost, $dessertCost);
+
+    // TODO: $discount = calculateDiscount($subtotal);
+
+    // TODO: $tax = calculateTax($subtotal - $discount);
+
+    // TODO: $final = ...
+
+}
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Student Café</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="script.js" defer><\/script>
+</head>
+<body>
+  <main class="card">
+    <p class="badge">Part 2 of 3</p>
+    <h1>Student Café Order Calculator</h1>
+    <form method="post">
+      <label>Sandwiches <input type="number" name="sandwiches" min="0" value="0"></label>
+      <label>Drinks <input type="number" name="drinks" min="0" value="0"></label>
+      <label>Desserts <input type="number" name="desserts" min="0" value="0"></label>
+      <button type="submit">Calculate</button>
+    </form>
+
+    <?php if ($submitted): ?>
+    <table class="receipt">
+      <tr><th>Sandwich cost</th><td>$<?php // TODO: echo the sandwich cost ?></td></tr>
+      <tr><th>Drink cost</th><td>$<?php // TODO: echo the drink cost ?></td></tr>
+      <tr><th>Dessert cost</th><td>$<?php // TODO: echo the dessert cost ?></td></tr>
+      <tr class="subtotal"><th>Subtotal</th><td>$<?php // TODO: echo the subtotal ?></td></tr>
+      <tr><th>Discount</th><td>$<?php // TODO: echo the discount ?></td></tr>
+      <tr><th>Tax</th><td>$<?php // TODO: echo the tax ?></td></tr>
+      <tr class="total"><th>Final amount</th><td>$<?php // TODO: echo the final amount ?></td></tr>
+    </table>
+    <?php endif; ?>
+  </main>
+</body>
+</html>
+` },
+      { name: 'style.css', editable: false, code: `body{font-family:system-ui,sans-serif;background:#eef4f1;margin:0;padding:24px;color:#213330}
+.card{max-width:440px;margin:0 auto;background:#fff;padding:24px;border-radius:8px;border:1px solid #d7e5e0}
+.badge{display:inline-block;margin:0 0 8px;padding:3px 10px;border-radius:999px;background:#dcefe6;color:#1f5c46;font-size:12px;font-weight:600}
+h1{margin:0 0 16px;font-size:21px}
+label{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+input{width:80px;padding:6px}
+button{margin-top:6px;padding:8px 16px;background:#2d6a4f;color:#fff;border:0;border-radius:4px;cursor:pointer}
+.receipt{width:100%;margin-top:20px;border-collapse:collapse}
+.receipt th{text-align:left;font-weight:400;color:#5f6f6b}
+.receipt td{text-align:right}
+.receipt th,.receipt td{padding:6px 0;border-bottom:1px solid #e7efec}
+.receipt tr.subtotal th,.receipt tr.subtotal td{border-top:2px solid #d7e5e0;font-weight:600;color:#213330}
+.receipt tr.total th,.receipt tr.total td{font-weight:700;font-size:17px;border-bottom:0}
+` },
+      { name: 'script.js', editable: false, code: `document.querySelectorAll('input[type=number]').forEach(function (el) {
+  el.addEventListener('focus', function () { el.select(); });
+});
+` }
+    ]
+  },
+  part3: {
+    title: 'Part 3 – Refactor Using Associative Arrays',
+    preview: true,
+    hints: [
+      'Loop with foreach ($prices as $item => $price) and multiply by $quantities[$item] to fill $costs[$item].',
+      'array_sum($costs) adds up every value in the $costs array, giving you the subtotal.',
+      'The discount and tax rules are the same as Parts 1 and 2, just applied to the array-based subtotal.',
+      'You can read a specific cost back out for display with $costs["sandwich"], $costs["drink"] and $costs["dessert"].'
+    ],
+    files: [
+      { name: 'index.php', editable: true, code: `<?php
+// Part 3 - Refactor Using Associative Arrays
+
+$prices = [
+    "sandwich" => 8.50,
+    "drink"    => 2.50,
+    "dessert"  => 4.00,
+];
+
+$submitted = $_SERVER['REQUEST_METHOD'] === 'POST';
+
+if ($submitted) {
+    $quantities = [
+        "sandwich" => (int) ($_POST['sandwiches'] ?? 0),
+        "drink"    => (int) ($_POST['drinks'] ?? 0),
+        "dessert"  => (int) ($_POST['desserts'] ?? 0),
+    ];
+
+    $costs = [];
+    // TODO: loop over $prices with foreach ($prices as $item => $price)
+    //       and set $costs[$item] = $price * $quantities[$item]
+
+
+    // TODO: calculate $subtotal from $costs (try array_sum())
+
+
+    // TODO: calculate $discount (10% when $subtotal is 30 or more, otherwise 0)
+
+
+    // TODO: calculate $tax (5% of the subtotal after the discount)
+
+
+    // TODO: calculate $final
+
+}
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Student Café</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="script.js" defer><\/script>
+</head>
+<body>
+  <main class="card">
+    <p class="badge">Part 3 of 3</p>
+    <h1>Student Café Order Calculator</h1>
+    <form method="post">
+      <label>Sandwiches <input type="number" name="sandwiches" min="0" value="0"></label>
+      <label>Drinks <input type="number" name="drinks" min="0" value="0"></label>
+      <label>Desserts <input type="number" name="desserts" min="0" value="0"></label>
+      <button type="submit">Calculate</button>
+    </form>
+
+    <?php if ($submitted): ?>
+    <table class="receipt">
+      <tr><th>Sandwich cost</th><td>$<?php // TODO: echo $costs['sandwich'] ?></td></tr>
+      <tr><th>Drink cost</th><td>$<?php // TODO: echo $costs['drink'] ?></td></tr>
+      <tr><th>Dessert cost</th><td>$<?php // TODO: echo $costs['dessert'] ?></td></tr>
+      <tr class="subtotal"><th>Subtotal</th><td>$<?php // TODO: echo the subtotal ?></td></tr>
+      <tr><th>Discount</th><td>$<?php // TODO: echo the discount ?></td></tr>
+      <tr><th>Tax</th><td>$<?php // TODO: echo the tax ?></td></tr>
+      <tr class="total"><th>Final amount</th><td>$<?php // TODO: echo the final amount ?></td></tr>
+    </table>
+    <?php endif; ?>
+  </main>
+</body>
+</html>
+` },
+      { name: 'style.css', editable: false, code: `body{font-family:system-ui,sans-serif;background:#f0eef7;margin:0;padding:24px;color:#2b2740}
+.card{max-width:440px;margin:0 auto;background:#fff;padding:24px;border-radius:8px;border:1px solid #ddd8ee}
+.badge{display:inline-block;margin:0 0 8px;padding:3px 10px;border-radius:999px;background:#e5e0f5;color:#463a8c;font-size:12px;font-weight:600}
+h1{margin:0 0 16px;font-size:21px}
+label{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+input{width:80px;padding:6px}
+button{margin-top:6px;padding:8px 16px;background:#4a3f8c;color:#fff;border:0;border-radius:4px;cursor:pointer}
+.receipt{width:100%;margin-top:20px;border-collapse:collapse}
+.receipt th{text-align:left;font-weight:400;color:#655f80}
+.receipt td{text-align:right}
+.receipt th,.receipt td{padding:6px 0;border-bottom:1px solid #ede9f7}
+.receipt tr.subtotal th,.receipt tr.subtotal td{border-top:2px solid #ddd8ee;font-weight:600;color:#2b2740}
+.receipt tr.total th,.receipt tr.total td{font-weight:700;font-size:17px;border-bottom:0}
+` },
+      { name: 'script.js', editable: false, code: `document.querySelectorAll('input[type=number]').forEach(function (el) {
+  el.addEventListener('focus', function () { el.select(); });
+});
+` }
+    ]
+  },
+  blank: { title: 'Blank PHP Editor', preview: false, stdin: '', hints: [], files: [{ name: 'index.php', editable: true, code: '<?php\n\n' }] }
+};
+
+/* File icons: the MIT-licensed VS Code (vscode-icons) file-type icons for PHP, CSS, JS and HTML, embedded so no download is needed. */
+const ICON_SVG = {"php": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 32 32\"><defs><radialGradient id=\"SVGQRCVdbYF\" cx=\"-16.114\" cy=\"20.532\" r=\"18.384\" gradientTransform=\"translate(26.52 -9.307)\" gradientUnits=\"userSpaceOnUse\"><stop offset=\"0\" stop-color=\"#fff\"/><stop offset=\".5\" stop-color=\"#4c6b96\"/><stop offset=\"1\" stop-color=\"#231f20\"/></radialGradient></defs><ellipse cx=\"16\" cy=\"16\" fill=\"url(#SVGQRCVdbYF)\" rx=\"14\" ry=\"7.365\"/><ellipse cx=\"16\" cy=\"16\" fill=\"#6280b6\" rx=\"13.453\" ry=\"6.818\"/><path fill=\"#fff\" d=\"m18.725 18.2l.667-3.434a1.75 1.75 0 0 0-.372-1.719a2.93 2.93 0 0 0-2-.525h-1.153l.331-1.7a.22.22 0 0 0-.215-.26h-1.6a.22.22 0 0 0-.215.177l-.709 3.646a2.05 2.05 0 0 0-.477-1.054a2.78 2.78 0 0 0-2.2-.807H7.7a.22.22 0 0 0-.215.177l-1.434 7.38a.22.22 0 0 0 .215.26h1.603a.22.22 0 0 0 .215-.177l.347-1.785h1.2a5.2 5.2 0 0 0 1.568-.2a3.1 3.1 0 0 0 1.15-.689a3.5 3.5 0 0 0 .68-.844l-.287 1.475a.22.22 0 0 0 .215.26h1.6a.22.22 0 0 0 .215-.177l.787-4.051h1.094c.466 0 .6.093.64.133s.1.165.025.569l-.635 3.265a.22.22 0 0 0 .215.26h1.62a.22.22 0 0 0 .207-.18m-7.395-2.834a1.75 1.75 0 0 1-.561 1.092a2.17 2.17 0 0 1-1.315.321h-.712l.515-2.651h.921c.677 0 .949.145 1.059.266a1.18 1.18 0 0 1 .093.972m14.216-2.034a2.78 2.78 0 0 0-2.2-.807h-3.091a.22.22 0 0 0-.215.177l-1.434 7.38a.22.22 0 0 0 .215.26h1.608a.22.22 0 0 0 .215-.177l.347-1.785h1.2a5.2 5.2 0 0 0 1.568-.2a3.1 3.1 0 0 0 1.15-.689a3.43 3.43 0 0 0 1.076-1.927a2.51 2.51 0 0 0-.439-2.232m-1.667 2.034a1.75 1.75 0 0 1-.561 1.092a2.17 2.17 0 0 1-1.318.32h-.71l.515-2.651h.921c.677 0 .949.145 1.059.266a1.18 1.18 0 0 1 .094.973\"/><path fill=\"#000004\" d=\"M10.178 13.908a1.65 1.65 0 0 1 1.221.338a1.34 1.34 0 0 1 .145 1.161a1.95 1.95 0 0 1-.642 1.223a2.36 2.36 0 0 1-1.448.37h-.978l.6-3.089Zm-3.917 6.216h1.608l.381-1.962h1.377a5 5 0 0 0 1.5-.191a2.84 2.84 0 0 0 1.07-.642a3.2 3.2 0 0 0 1.01-1.808a2.3 2.3 0 0 0-.385-2.044a2.57 2.57 0 0 0-2.035-.732H7.7Zm8.126-9.342h1.6l-.387 1.962h1.421a2.77 2.77 0 0 1 1.85.468a1.55 1.55 0 0 1 .305 1.516l-.667 3.434H16.89l.635-3.265a.89.89 0 0 0-.08-.76a1.12 1.12 0 0 0-.8-.2H15.37l-.822 4.228h-1.6Zm8.34 3.126a1.65 1.65 0 0 1 1.221.338a1.34 1.34 0 0 1 .145 1.161a1.95 1.95 0 0 1-.642 1.223A2.36 2.36 0 0 1 22 17h-.978l.6-3.089Zm-3.917 6.216h1.608l.381-1.962h1.377a5 5 0 0 0 1.5-.191a2.84 2.84 0 0 0 1.07-.642a3.2 3.2 0 0 0 1.01-1.808a2.3 2.3 0 0 0-.385-2.044a2.57 2.57 0 0 0-2.035-.732h-3.092Z\"/></svg>", "css": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 32 32\"><path fill=\"#639\" d=\"M1.995 1.994h23.52a4.48 4.48 0 0 1 4.48 4.48v19.04a4.48 4.48 0 0 1-4.48 4.48H6.475a4.48 4.48 0 0 1-4.48-4.48Z\"/><path fill=\"#fff\" d=\"M9.079 24.87v-4.704c0-1.876 1.204-2.884 3.024-2.884c1.792-.028 2.912 1.148 2.856 3.136h-2.072c.056-.756-.28-1.316-.84-1.288c-.7 0-.896.476-.896 1.372v4.088c0 .868.28 1.288.896 1.316c.644 0 .896-.644.84-1.372h2.072c.112 2.044-1.176 3.248-2.996 3.22c-1.764 0-2.884-.98-2.884-2.884m6.636-.336h1.932c.028.896.308 1.456.924 1.456s.84-.364.84-1.204c0-.7-.308-1.092-1.064-1.456l-.728-.336c-1.288-.616-1.82-1.372-1.82-2.884c0-1.68 1.064-2.856 2.8-2.856s2.66 1.204 2.688 3.164h-1.876c0-.812-.168-1.372-.784-1.372c-.56 0-.84.28-.84.98s.252.98.924 1.26l.672.308c1.428.672 2.044 1.54 2.044 3.164c0 1.932-1.092 2.996-2.884 2.996s-2.8-1.232-2.828-3.22m6.328 0h1.96c0 .896.308 1.456.896 1.456s.84-.364.84-1.204c0-.7-.28-1.092-1.064-1.456l-.728-.336c-1.288-.616-1.792-1.372-1.792-2.884c0-1.68 1.036-2.856 2.8-2.856s2.632 1.204 2.688 3.164h-1.876c-.028-.812-.196-1.372-.812-1.372c-.56 0-.812.28-.812.98s.224.98.896 1.26l.7.308c1.4.672 2.016 1.54 2.016 3.164c0 1.932-1.092 2.996-2.884 2.996s-2.8-1.232-2.828-3.22\"/></svg>", "js": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 32 32\"><path fill=\"#f5de19\" d=\"M2 2h28v28H2z\"/><path d=\"M20.809 23.875a2.87 2.87 0 0 0 2.6 1.6c1.09 0 1.787-.545 1.787-1.3c0-.9-.716-1.222-1.916-1.747l-.658-.282c-1.9-.809-3.16-1.822-3.16-3.964c0-1.973 1.5-3.476 3.853-3.476a3.89 3.89 0 0 1 3.742 2.107L25 18.128A1.79 1.79 0 0 0 23.311 17a1.145 1.145 0 0 0-1.259 1.128c0 .789.489 1.109 1.618 1.6l.658.282c2.236.959 3.5 1.936 3.5 4.133c0 2.369-1.861 3.667-4.36 3.667a5.06 5.06 0 0 1-4.795-2.691Zm-9.295.228c.413.733.789 1.353 1.693 1.353c.864 0 1.41-.338 1.41-1.653v-8.947h2.631v8.982c0 2.724-1.6 3.964-3.929 3.964a4.085 4.085 0 0 1-3.947-2.4Z\"/></svg>", "html": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 32 32\"><path fill=\"#e44f26\" d=\"M5.902 27.201L3.655 2h24.69l-2.25 25.197L15.985 30z\"/><path fill=\"#f1662a\" d=\"m16 27.858l8.17-2.265l1.922-21.532H16z\"/><path fill=\"#ebebeb\" d=\"M16 13.407h-4.09l-.282-3.165H16V7.151H8.25l.074.83l.759 8.517H16zm0 8.027l-.014.004l-3.442-.929l-.22-2.465H9.221l.433 4.852l6.332 1.758l.014-.004z\"/><path fill=\"#fff\" d=\"M15.989 13.407v3.091h3.806l-.358 4.009l-3.448.93v3.216l6.337-1.757l.046-.522l.726-8.137l.076-.83zm0-6.256v3.091h7.466l.062-.694l.141-1.567l.074-.83z\"/></svg>", "other": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 32 32\"><path fill=\"#c5c5c5\" d=\"M20.414 2H5v28h22V8.586ZM7 28V4h12v6h6v18Z\"/></svg>"};
+ICON_SVG.folder = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 32 32\"><path fill=\"#c09553\" d=\"M27.5 5.5h-9.3l-2.1 4.2H4.4v16.8h25.2v-21Zm0 4.2h-8.2l1.1-2.1h7.1Z\"/></svg>";
+ICON_SVG.folderOpen = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 32 32\"><path fill=\"#dcb67a\" d=\"M27.4 5.5h-9.2l-2.1 4.2H4.3v16.8h25.2v-21Zm0 18.7H6.6V11.8h20.8Zm0-14.5h-8.2l1-2.1h7.1v2.1Z\"/><path fill=\"#dcb67a\" d=\"M25.7 13.7H.5l3.8 12.8h25.2z\"/></svg>";
+const ICON_URI = {};
+for (const k in ICON_SVG) ICON_URI[k] = 'data:image/svg+xml;base64,' + btoa(ICON_SVG[k]);
+const TRASH = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6"/></svg>';
+function icon(name) {
+  const ext = name.split('.').pop().toLowerCase();
+  return '<img class="ficon" alt="" src="' + (ICON_URI[ext] || ICON_URI.other) + '">';
+}
+const PLAY = '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M7 4l13 8-13 8z"/></svg>';
+const PEN = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20l4-1 11-11-3-3L5 16z"/></svg>';
+function actBtn(cls, title, svg, fn) {
+  const b = document.createElement('button');
+  b.className = cls; b.title = title; b.setAttribute('aria-label', title); b.innerHTML = svg; b.onclick = fn;
+  return b;
+}
+
+const $ = id => document.getElementById(id);
+const params = new URLSearchParams(location.search);
+let key = QUESTIONS[params.get('q')] ? params.get('q') : (params.get('q') ? 'blank' : 'part1');
+let docs = {}, custom = [], folders = [], open = new Set(), selDir = '', renaming = null, newMode = 'file', mainName = '', trash = [], cur = '', shown = 0, req = { m: 'get', d: {} };
+
+const MODES = { php: 'application/x-httpd-php', css: 'css', js: 'javascript', html: 'htmlmixed', json: 'application/json', txt: 'text/plain' };
+const ALLOWED = ['php', 'css', 'js', 'html', 'txt', 'json'], MAX_CUSTOM = 15, MAX_FOLDERS = 8;
+const modeOf = n => MODES[n.split('.').pop()] || 'text/plain';
+
+const store = (k, v) => { try { v === undefined ? sessionStorage.removeItem(k) : sessionStorage.setItem(k, v); } catch (e) {} };
+const load = k => { try { return sessionStorage.getItem(k); } catch (e) { return null; } };
+const esc = s => s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+
+const providedNames = () => QUESTIONS[key].files.map(f => f.name);
+const allNames = () => providedNames().concat(custom);
+const metaOf = n => QUESTIONS[key].files.find(f => f.name === n) || { name: n, editable: true, custom: true };
+const defaultMain = () => (QUESTIONS[key].files.find(f => f.name.endsWith('.php')) || QUESTIONS[key].files[0]).name;
+const blankOf = n => n.endsWith('.php') ? '<?php\n\n' : '';
+const baseOf = p => p.split('/').pop();
+const dirOf = p => p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '';
+const ancestors = p => { const parts = p.split('/'), out = []; for (let i = 1; i < parts.length; i++) out.push(parts.slice(0, i).join('/')); return out; };
+const norm = t => t.trim().replace(/^(\.?\/)+/, '').replace(/\/+/g, '/').replace(/\/$/, '');
+function allFolders() {
+  const set = new Set();
+  folders.forEach(f => ancestors(f + '/x').forEach(a => set.add(a)));
+  custom.forEach(n => ancestors(n).forEach(a => set.add(a)));
+  return [...set].sort();
+}
+const saveCustom = () => {
+  store('custom:' + key, custom.length ? JSON.stringify(custom) : undefined);
+  store('folders:' + key, folders.length ? JSON.stringify(folders) : undefined);
+};
+function setMain(path, render = true) {
+  mainName = path;
+  store('main:' + key, path === defaultMain() ? undefined : path);
+  if (render) renderTabs();
+}
+function showFile(name) {
+  cur = name; selDir = dirOf(name);
+  cm.swapDoc(docs[name]);
+  updHist();
+  cm.setOption('readOnly', metaOf(name).editable ? false : 'nocursor');
+  renderTabs();
+}
+// Returns an error message, or '' when the path is fine. `ignore` = the item being renamed.
+function checkPath(path, isFolder, ignore) {
+  if (!path) return 'Type a name first.';
+  const parts = path.split('/'), fileSeg = /^[A-Za-z0-9_-][A-Za-z0-9_.-]{0,39}$/, dirSeg = /^[A-Za-z0-9_-]{1,40}$/;
+  if (parts.length > 4) return 'Folders can go up to 3 levels deep.';
+  for (let i = 0; i < parts.length; i++) {
+    const isFile = !isFolder && i === parts.length - 1;
+    if (!(isFile ? fileSeg : dirSeg).test(parts[i])) return isFile ? 'Use letters, numbers, - or _ only (no spaces).' : 'Folder names use letters, numbers, - or _ only.';
+  }
+  if (!isFolder) {
+    const b = baseOf(path);
+    if (!b.includes('.') || !ALLOWED.includes(b.split('.').pop().toLowerCase())) return 'The name must end in .php, .css, .js, .html, .txt or .json';
+  }
+  const inIgnored = n => ignore && (n === ignore || n.startsWith(ignore + '/'));
+  const files = allNames().filter(n => !inIgnored(n)), dirs = allFolders().filter(d => !inIgnored(d)), low = path.toLowerCase();
+  if (files.some(n => n.toLowerCase() === low) || dirs.some(d => d.toLowerCase() === low)) return 'That name is already used.';
+  if (ancestors(path).some(a => files.some(n => n.toLowerCase() === a.toLowerCase()))) return 'A file with that name is in the way.';
+  if (!ignore && !isFolder && custom.length >= MAX_CUSTOM) return 'You can create up to ' + MAX_CUSTOM + ' files.';
+  if (!ignore && isFolder && allFolders().length >= MAX_FOLDERS) return 'You can create up to ' + MAX_FOLDERS + ' folders.';
+  return '';
+}
+function createFile(raw) {
+  const path = norm(raw), err = checkPath(path, false);
+  if (err) return err;
+  custom.push(path); ancestors(path).forEach(a => open.add(a)); saveCustom();
+  docs[path] = CodeMirror.Doc(blankOf(path), modeOf(path));
+  store('f:' + key + ':' + path, blankOf(path));
+  showFile(path); cm.focus();
+  return '';
+}
+function createFolder(raw) {
+  const path = norm(raw), err = checkPath(path, true);
+  if (err) return err;
+  folders.push(path); ancestors(path + '/x').forEach(a => open.add(a)); selDir = path; saveCustom(); renderTabs();
+  return '';
+}
+function moveOne(old, path) {
+  custom[custom.indexOf(old)] = path;
+  const ext = n => n.split('.').pop().toLowerCase(), v = docs[old].getValue();
+  docs[path] = ext(old) === ext(path) ? docs[old] : CodeMirror.Doc(v, modeOf(path));
+  delete docs[old]; store('f:' + key + ':' + old); store('f:' + key + ':' + path, v);
+  if (cur === old) cur = path;
+  if (mainName === old) setMain(path, false);
+}
+function renameFile(old, raw) {
+  const path = norm(raw);
+  if (path === old) return '';
+  const err = checkPath(path, false, old);
+  if (err) return err;
+  moveOne(old, path); ancestors(path).forEach(a => open.add(a)); saveCustom(); showFile(cur);
+  return '';
+}
+function renameFolder(old, raw) {
+  const path = norm(raw);
+  if (path === old) return '';
+  if (path.startsWith(old + '/')) return 'A folder cannot be moved into itself.';
+  const err = checkPath(path, true, old);
+  if (err) return err;
+  const swap = p => path + p.slice(old.length), inside = p => p === old || p.startsWith(old + '/');
+  custom.filter(n => n.startsWith(old + '/')).forEach(n => moveOne(n, swap(n)));
+  folders = folders.map(f => inside(f) ? swap(f) : f);
+  open = new Set([...open].map(f => inside(f) ? swap(f) : f));
+  ancestors(path + '/x').forEach(a => open.add(a));
+  if (inside(selDir)) selDir = swap(selDir);
+  saveCustom(); showFile(cur);
+  return '';
+}
+function deletePath(path, isFolder) {
+  const inside = p => p === path || p.startsWith(path + '/');
+  const gone = isFolder ? custom.filter(inside) : [path];
+  const entry = { label: path, files: {}, folders: isFolder ? allFolders().filter(inside) : [] };
+  gone.forEach(n => { entry.files[n] = docs[n].getValue(); delete docs[n]; store('f:' + key + ':' + n); });
+  const wasCur = gone.includes(cur);
+  custom = custom.filter(n => !gone.includes(n));
+  if (isFolder) folders = folders.filter(f => !inside(f));
+  if (isFolder && inside(selDir)) selDir = dirOf(path);
+  trash.push(entry); if (trash.length > 5) trash.shift();
+  if (gone.includes(mainName)) setMain(defaultMain(), false);
+  saveCustom(); clearUndo(); updTrash();
+  showFile(wasCur ? QUESTIONS[key].files.find(f => f.editable).name : cur);
+}
+function updTrash() {
+  const b = $('undoDelete');
+  b.hidden = !trash.length;
+  if (trash.length) b.title = 'Restore ' + trash[trash.length - 1].label;
+}
+function undoDelete() {
+  const e = trash.pop();
+  if (!e) return;
+  e.folders.forEach(f => { if (!folders.includes(f)) folders.push(f); ancestors(f + '/x').forEach(a => open.add(a)); });
+  const taken = m => allNames().some(x => x.toLowerCase() === m.toLowerCase());
+  let first = '';
+  for (const n0 in e.files) {
+    let n = n0, k = 1;
+    while (taken(n)) { n = n0.replace(/(\.[^./]*)$/, '-restored' + (k > 1 ? k : '') + '$1'); k++; }
+    custom.push(n); ancestors(n).forEach(a => open.add(a));
+    docs[n] = CodeMirror.Doc(e.files[n0], modeOf(n)); store('f:' + key + ':' + n, e.files[n0]);
+    first = first || n;
+  }
+  saveCustom(); updTrash(); showFile(first || cur);
+}
+
+const cm = CodeMirror.fromTextArea($('code'), {
+  theme: 'material-darker', lineNumbers: true, matchBrackets: true, autoCloseBrackets: true,
+  indentUnit: 4, indentWithTabs: false, undoDepth: 1000, historyEventDelay: 400,
+  extraKeys: { 'Ctrl-Enter': () => runFresh(), 'Cmd-Enter': () => runFresh(), Tab: c => c.replaceSelection('    ') }
+});
+
+function renameRow(path, isFolder, depth) {
+  const w = document.createElement('div'), i = document.createElement('input'), e = document.createElement('div');
+  w.className = 'rnwrap'; w.style.paddingLeft = (10 + depth * 14) + 'px';
+  i.className = 'rn'; i.value = path; i.maxLength = 60; i.spellcheck = false; i.setAttribute('aria-label', 'New name for ' + path);
+  e.className = 'rnerr'; e.setAttribute('role', 'alert');
+  i.addEventListener('keydown', ev => {
+    if (ev.key === 'Enter') { const err = (isFolder ? renameFolder : renameFile)(path, i.value); if (err) e.textContent = err; else { renaming = null; renderTabs(); } }
+    else if (ev.key === 'Escape') { renaming = null; renderTabs(); }
+  });
+  i.addEventListener('input', () => { e.textContent = ''; });
+  i.addEventListener('blur', () => setTimeout(() => { if (renaming === path) { renaming = null; renderTabs(); } }, 200));
+  w.append(i, e);
+  return w;
+}
+function renderTabs() {
+  const ex = $('explorer'), f0 = metaOf(cur), dirs = allFolders(), names = allNames();
+  ex.innerHTML = '';
+  function folderRow(d, depth) {
+    if (renaming === d) return renameRow(d, true, depth);
+    const row = document.createElement('div'), b = document.createElement('button'), isOpen = open.has(d);
+    row.className = 'frow' + (selDir === d ? ' sel' : '');
+    b.className = 'fitem'; b.style.paddingLeft = (14 + depth * 14) + 'px';
+    b.innerHTML = '<img class="ficon" alt="" src="' + ICON_URI[isOpen ? 'folderOpen' : 'folder'] + '"><span>' + esc(baseOf(d)) + '</span>';
+    b.setAttribute('aria-expanded', isOpen);
+    b.onclick = () => { if (open.has(d)) open.delete(d); else open.add(d); selDir = d; renderTabs(); };
+    row.appendChild(b);
+    const acts = document.createElement('div'); acts.className = 'acts';
+    acts.append(actBtn('', 'Rename ' + d, PEN, () => { renaming = d; renderTabs(); }),
+      actBtn('del', 'Delete ' + d, TRASH, () => ask('Delete folder ' + d + '?', 'This deletes the folder and every file inside it. You can use Undo delete right afterwards.', 'Yes, delete', () => deletePath(d, true))));
+    row.appendChild(acts);
+    return row;
+  }
+  function fileRow(n, depth) {
+    const f = metaOf(n);
+    if (renaming === n) return renameRow(n, false, depth);
+    const row = document.createElement('div'), b = document.createElement('button');
+    row.className = 'frow' + (n === cur ? ' cur' : '');
+    b.className = 'fitem' + (n === cur ? ' on' : ''); b.style.paddingLeft = (14 + depth * 14) + 'px';
+    b.innerHTML = icon(n) + '<span>' + esc(baseOf(n)) + '</span>' + (f.editable ? '' : '<span class="ro">read-only</span>');
+    b.onclick = () => showFile(n);
+    row.appendChild(b);
+    if (n === mainName) row.insertAdjacentHTML('beforeend', '<span class="runmark" title="This file runs when you press Run">' + PLAY + '</span>');
+    const acts = document.createElement('div'); acts.className = 'acts';
+    if (n.endsWith('.php') && n !== mainName) acts.appendChild(actBtn('', 'Run this file instead', PLAY, () => setMain(n)));
+    if (f.custom) {
+      acts.appendChild(actBtn('', 'Rename ' + n, PEN, () => { renaming = n; renderTabs(); }));
+      acts.appendChild(actBtn('del', 'Delete ' + n, TRASH, () => ask('Delete ' + n + '?', 'This deletes ' + n + ' and everything written in it. You can use Undo delete right afterwards. Any include or require of this file will stop working.', 'Yes, delete', () => deletePath(n, false))));
+    }
+    row.appendChild(acts);
+    return row;
+  }
+  (function renderDir(dir, depth) {
+    dirs.filter(d => dirOf(d) === dir).forEach(d => { ex.appendChild(folderRow(d, depth)); if (open.has(d)) renderDir(d, depth + 1); });
+    names.filter(n => dirOf(n) === dir).forEach(n => ex.appendChild(fileRow(n, depth)));
+  })('', 0);
+  const rn = ex.querySelector('.rn');
+  if (rn) { rn.focus(); const dot = rn.value.lastIndexOf('.'); rn.setSelectionRange(rn.value.lastIndexOf('/') + 1, dot > 0 ? dot : rn.value.length); }
+  $('filetabs').innerHTML = '<div class="ftab">' + icon(cur) + '<span>' + esc(cur) + '</span></div>' +
+    (f0.editable ? '' : '<span class="note">You do not need to edit this file</span>');
+  $('run').title = 'Runs ' + mainName + ' (Ctrl+Enter)';
+}
+function view(v) {
+  $('vPrev').className = v === 'prev' ? 'on' : ''; $('vOut').className = v === 'out' ? 'on' : '';
+  $('frame').hidden = v !== 'prev'; $('out').hidden = v !== 'out';
+}
+
+function loadQuestion() {
+  clearUndo();
+  const q = QUESTIONS[key];
+  $('title').textContent = q.title; document.title = q.title;
+  docs = {};
+  q.files.forEach(f => {
+    docs[f.name] = CodeMirror.Doc(load('f:' + key + ':' + f.name) ?? f.code, modeOf(f.name));
+  });
+  const list = k => { try { const v = JSON.parse(load(k + ':' + key) || '[]'); return Array.isArray(v) ? v.filter(x => typeof x === 'string') : []; } catch (e) { return []; } };
+  custom = list('custom').filter(n => !q.files.some(f => f.name === n)); folders = list('folders');
+  custom.forEach(n => { docs[n] = CodeMirror.Doc(load('f:' + key + ':' + n) ?? blankOf(n), modeOf(n)); });
+  open = new Set(allFolders()); selDir = ''; renaming = null; trash = []; updTrash();
+  const savedMain = load('main:' + key);
+  mainName = savedMain && docs[savedMain] && savedMain.endsWith('.php') ? savedMain : defaultMain();
+  $('newRow').hidden = true;
+  showFile(q.files.find(f => f.editable).name);
+  $('stdinbox').hidden = q.stdin === undefined;
+  $('stdin').value = load('stdin:' + key) ?? (q.stdin || '');
+  $('vPrev').hidden = !q.preview;
+  shown = 0; $('hints').style.display = 'none'; $('hints').innerHTML = '';
+  const hb = $('hint'); hb.hidden = !q.hints?.length; hb.disabled = false;
+  hb.textContent = 'Show hint (0/' + (q.hints?.length || 0) + ')';
+  $('out').innerHTML = '<span class="m">Press Run to see your result here.</span>';
+  $('frame').srcdoc = '<p style="font:14px system-ui;color:#777;padding:16px">Press Run to see your page here.</p>';
+  view(q.preview ? 'prev' : 'out');
+  req = { m: 'get', d: {} };
+}
+
+if (!params.get('q')) {
+  const p = $('picker'); p.hidden = false;
+  for (const k in QUESTIONS) p.add(new Option(QUESTIONS[k].title, k));
+  p.value = key; p.onchange = () => { key = p.value; loadQuestion(); };
+}
+
+function updHist() { const h = cm.historySize(); $('undo').disabled = !h.undo; $('redo').disabled = !h.redo; }
+$('undo').onclick = () => { cm.undo(); cm.focus(); };
+$('redo').onclick = () => { cm.redo(); cm.focus(); };
+cm.on('swapDoc', updHist);
+cm.on('change', () => { updHist(); clearUndo(); if (cur) store('f:' + key + ':' + cur, cm.getValue()); });
+$('stdin').addEventListener('input', e => { clearUndo(); store('stdin:' + key, e.target.value); });
+$('vPrev').onclick = () => view('prev'); $('vOut').onclick = () => view('out');
+
+let undoSnap = null, onYes = null, lastFocus = null;
+const clearUndo = () => { undoSnap = null; $('undoReset').hidden = true; };
+function ask(title, body, yesText, fn) {
+  lastFocus = document.activeElement; onYes = fn;
+  $('dlgT').textContent = title; $('dlgB').textContent = body; $('yes').textContent = yesText;
+  $('veil').hidden = false; $('no').focus();
+}
+const closeDlg = () => { $('veil').hidden = true; onYes = null; if (lastFocus && lastFocus.isConnected) lastFocus.focus(); };
+
+$('reset').onclick = () => ask('Reset all code?',
+  'This replaces the starter files with the original code and deletes any files and folders you created. You can use Undo reset right afterwards if you change your mind.',
+  'Yes, reset everything', doReset);
+$('no').onclick = closeDlg;
+$('yes').onclick = () => { const fn = onYes; $('veil').hidden = true; onYes = null; if (fn) fn(); };
+$('veil').addEventListener('mousedown', e => { if (e.target === $('veil')) closeDlg(); });
+document.addEventListener('keydown', e => {
+  if ($('veil').hidden) return;
+  if (e.key === 'Escape') closeDlg();
+  if (e.key === 'Tab') { e.preventDefault(); ($('no').matches(':focus') ? $('yes') : $('no')).focus(); } // keep focus inside the dialog
+});
+
+function doReset() {
+  const snap = { files: {}, custom: custom.slice(), folders: folders.slice(), main: mainName, stdin: $('stdin').value };
+  allNames().forEach(n => { snap.files[n] = docs[n].getValue(); store('f:' + key + ':' + n); });
+  ['stdin', 'custom', 'folders', 'main'].forEach(k => store(k + ':' + key));
+  loadQuestion();
+  undoSnap = snap; $('undoReset').hidden = false;
+}
+$('undoReset').onclick = () => {
+  if (!undoSnap) return;
+  const snap = undoSnap; clearUndo();
+  custom = snap.custom.slice(); folders = snap.folders.slice(); saveCustom();
+  allNames().forEach(n => {
+    const v = snap.files[n];
+    if (docs[n]) docs[n].setValue(v); else docs[n] = CodeMirror.Doc(v, modeOf(n));
+    store('f:' + key + ':' + n, v);
+  });
+  open = new Set(allFolders());
+  if (docs[snap.main]) setMain(snap.main, false);
+  $('stdin').value = snap.stdin; store('stdin:' + key, snap.stdin);
+  showFile(cur);
+};
+$('undoDelete').onclick = undoDelete;
+
+// New file / new folder: the two buttons in the Files panel
+function openNew(mode) {
+  newMode = mode; const i = $('newName');
+  $('newRow').hidden = false; $('newErr').textContent = '';
+  i.placeholder = mode === 'file' ? 'helpers.php' : 'includes';
+  i.value = selDir ? selDir + '/' : ''; i.focus(); i.setSelectionRange(i.value.length, i.value.length);
+}
+$('newFile').onclick = () => openNew('file');
+$('newFolder').onclick = () => openNew('folder');
+$('newName').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { const err = (newMode === 'file' ? createFile : createFolder)($('newName').value); if (err) $('newErr').textContent = err; else $('newRow').hidden = true; }
+  else if (e.key === 'Escape') $('newRow').hidden = true;
+});
+$('newName').addEventListener('input', () => { $('newErr').textContent = ''; });
+$('newName').addEventListener('blur', () => setTimeout(() => { $('newRow').hidden = true; }, 200));
+
+$('hint').onclick = () => {
+  const h = QUESTIONS[key].hints;
+  if (shown >= h.length) return;
+  const p = document.createElement('p');
+  p.textContent = 'Hint ' + (shown + 1) + ': ' + h[shown++];
+  $('hints').appendChild(p); $('hints').style.display = 'block';
+  $('hint').textContent = shown < h.length ? 'Show hint (' + shown + '/' + h.length + ')' : 'All hints shown';
+  $('hint').disabled = shown >= h.length;
+};
+
+const b64 = s => btoa(unescape(encodeURIComponent(s)));
+function wrap(code, stdin, r) {
+  // Prelude sits on line 1 so PHP error line numbers match the editor.
+  const pre = '<?php $__in=explode("\\n",base64_decode("' + b64(stdin) + '"));' +
+    'function __rl($p=""){global $__in;echo $p;return count($__in)?array_shift($__in):false;}' +
+    '$__r=json_decode(base64_decode("' + b64(JSON.stringify(r)) + '"),true);' +
+    'if($__r["m"]==="post"){$_POST=$__r["d"];$_SERVER["REQUEST_METHOD"]="POST";}else{$_GET=$__r["d"];$_SERVER["REQUEST_METHOD"]="GET";}' +
+    '$_REQUEST=$__r["d"];unset($__r); ?>';
+  return pre + fix(code);
+}
+const fix = code => code.replace(/\breadline\s*\(/g, '__rl(').replace(/\bfgets\s*\(\s*STDIN\s*\)/g, '__rl()');
+
+const BRIDGE = '<script>document.addEventListener("submit",function(e){e.preventDefault();var f=e.target,d={};' +
+  'new FormData(f).forEach(function(v,k){if(typeof v==="string")d[k]=v});' +
+  'parent.postMessage({fp:1,m:(f.getAttribute("method")||"get").toLowerCase(),d:d},"*")},true);' +
+  'document.addEventListener("click",function(e){var a=e.target.closest&&e.target.closest("a[href]");' +
+  'if(a&&a.getAttribute("href").charAt(0)!=="#")e.preventDefault()},true)<\/script>';
+
+function inline(html) {
+  allNames().forEach(name => {
+    const f = { name };
+    if (name.endsWith('.php')) return;
+    const code = docs[name].getValue(), n = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (f.name.endsWith('.css'))
+      html = html.replace(new RegExp('<link[^>]*href=["\'](?:\\./)?' + n + '["\'][^>]*>', 'gi'), () => '<style>' + code + '</style>');
+    if (f.name.endsWith('.js'))
+      html = html.replace(new RegExp('<script[^>]*src=["\'](?:\\./)?' + n + '["\'][^>]*>\\s*<\\/script>', 'gi'),
+        () => '<script>window.addEventListener("DOMContentLoaded",function(){' + code.replace(/<\/script/gi, '<\\/script') + '\n});<\/script>');
+  });
+  return html;
+}
+
+// php-wasm reports PHP-level parse errors, fatal errors, warnings and notices
+// through the 'output' event, not 'error' - so they show up mixed into normal
+// output text rather than on a separate channel. Detect them there instead.
+const PHP_DIAG = /(?:^|\n)\s*(?:Parse error|Fatal error|Warning|Notice|Deprecated):/;
+
+// One PHP engine instance is kept alive for the whole session and reused for
+// every Run/Calculate click, instead of creating `new PhpWeb()` each time.
+// Each `new PhpWeb()` compiles and instantiates a fresh WebAssembly module
+// with its own multi-megabyte linear memory, and the old instance's memory
+// is not reliably released by the browser between clicks - across a long
+// exam session with many Run clicks this grows until the tab runs out of
+// memory ("memory not getting allocated") and needs a refresh to recover.
+// `refresh()` resets PHP's own state (functions, globals, included files)
+// inside the SAME WebAssembly instance instead, so repeated runs stay flat
+// in memory. Sink variables are module-level so the output/error listeners
+// can be attached once and simply re-armed before each run.
+let php = null, sinkText = '', sinkErrs = '';
+async function getPhp() {
+  if (php) { await php.refresh(); return php; }
+  php = new PhpWeb();
+  php.addEventListener('output', e => { sinkText += [].concat(e.detail).join(''); });
+  php.addEventListener('error', e => { sinkErrs += [].concat(e.detail).join(''); });
+  return php;
+}
+
+async function run() {
+  const btn = $('run'), q = QUESTIONS[key];
+  if (btn.disabled) return;
+  btn.disabled = true; btn.textContent = 'Running…';
+  sinkText = ''; sinkErrs = '';
+  try {
+    const main = mainName;
+    await phpReady;
+    if (!PhpWeb) throw new Error('The PHP engine could not be loaded (' + (window.__phpErr || 'unknown error') + '). Check your connection or that cdn.jsdelivr.net is allowed.');
+    const engine = await getPhp();
+    for (const d of allFolders()) { try { await engine.mkdir('/' + d); } catch (e) {} }
+    for (const n of allNames()) await engine.writeFile('/' + n, n.endsWith('.php') ? fix(docs[n].getValue()) : docs[n].getValue());
+    await engine.run(wrap(docs[main].getValue(), $('stdin').value, req));
+  } catch (err) {
+    sinkErrs += String(err && err.message || err);
+    php = null; // the instance may be in a broken state after a JS-level failure; rebuild next run
+  }
+  const text = sinkText, errs = sinkErrs;
+  const flagged = !!errs || PHP_DIAG.test(text);
+  $('out').innerHTML = (flagged ? '<span class="e">' + esc(text) + (errs ? '\n' + esc(errs) : '') + '</span>' : esc(text)) ||
+    '<span class="m">(no output)</span>';
+  if (q.preview) {
+    $('frame').srcdoc = inline(text) + BRIDGE;
+    view(flagged ? 'out' : 'prev');
+  }
+  btn.disabled = false; btn.textContent = 'Run (Ctrl+Enter)';
+}
+function runFresh() { req = { m: 'get', d: {} }; run(); }
+
+window.addEventListener('message', e => {
+  if (e.source !== $('frame').contentWindow || !e.data || !e.data.fp) return;
+  req = { m: e.data.m, d: e.data.d }; run();
+});
+$('run').onclick = runFresh;
+loadQuestion();
+
+</script>
+</body>
+</html>
