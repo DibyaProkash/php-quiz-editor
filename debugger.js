@@ -59,9 +59,14 @@ echo '<<<DBGSRC>>>' . base64_encode($__out);
 // runs the trace-dump as ordinary trailing code instead. That means it's skipped if the
 // student's own code calls exit()/die(), same as anything else after that point would be.)
 function wrapDebug(instrumentedCode, stdin, r) {
-  const pre = '<?php $__in=explode("\\n",base64_decode("' + b64(stdin) + '"));' +
+  const pre =
+    '<?php $__in=explode("\\n",base64_decode("' +
+    b64(stdin) +
+    '"));' +
     'function __rl($p=""){global $__in;echo $p;return count($__in)?array_shift($__in):false;}' +
-    '$__r=json_decode(base64_decode("' + b64(JSON.stringify(r)) + '"),true);' +
+    '$__r=json_decode(base64_decode("' +
+    b64(JSON.stringify(r)) +
+    '"),true);' +
     'if($__r["m"]==="post"){$_POST=$__r["d"];$_SERVER["REQUEST_METHOD"]="POST";}else{$_GET=$__r["d"];$_SERVER["REQUEST_METHOD"]="GET";}' +
     '$_REQUEST=$__r["d"];unset($__r);' +
     // __safe() makes any captured value JSON-encodable (objects/resources can't be
@@ -75,8 +80,9 @@ function wrapDebug(instrumentedCode, stdin, r) {
     // this array (and the deep-copies __safe() makes of it) without bound and
     // crashing the tab - it does not stop the loop itself from still running.
     'function __cap($vars,$line){if(count($GLOBALS["__trace"])>=5000)return;unset($vars["__trace"]);$GLOBALS["__trace"][]=array("line"=>$line,"vars"=>__safe($vars));}' +
-    ' ?>';
-  const trailer = '<?php echo "\\n<<<DBGTRACE>>>".base64_encode(json_encode($GLOBALS["__trace"])); ?>';
+    " ?>";
+  const trailer =
+    '<?php echo "\\n<<<DBGTRACE>>>".base64_encode(json_encode($GLOBALS["__trace"])); ?>';
   return pre + instrumentedCode + trailer;
 }
 
@@ -84,12 +90,17 @@ function wrapDebug(instrumentedCode, stdin, r) {
 // php-runner.js - so it takes its turn behind the engineBusy lock like Run/Tests do.
 async function instrumentSource(src) {
   const engine = await getPhp();
-  await engine.writeFile('/__dbgsrc.php', src);
-  sinkText = ''; sinkErrs = '';
+  await engine.writeFile("/__dbgsrc.php", src);
+  sinkText = "";
+  sinkErrs = "";
   await engine.run(INSTRUMENTER_PHP);
-  const marker = '<<<DBGSRC>>>';
+  const marker = "<<<DBGSRC>>>";
   const idx = sinkText.indexOf(marker);
-  if (idx === -1) throw new Error('Could not prepare the code for debugging.' + (sinkErrs ? ' ' + sinkErrs : ''));
+  if (idx === -1)
+    throw new Error(
+      "Could not prepare the code for debugging." +
+        (sinkErrs ? " " + sinkErrs : ""),
+    );
   return atob(sinkText.slice(idx + marker.length).trim());
 }
 
@@ -100,27 +111,58 @@ async function instrumentSource(src) {
 // would sit in the temporal dead zone at that point even though the function itself
 // is already hoisted and callable - `var` is hoisted AND initialized immediately, so
 // it works the same way in both a real browser and a concatenated build.
-var debugTrace = [], debugStep = 0, dbgHighlightLine = null;
+var debugTrace = [],
+  debugStep = 0,
+  dbgHighlightLine = null;
 
 // Variables the student never wrote themselves - our own instrumentation plumbing,
 // and PHP's superglobals - so the Variables panel only ever shows what they wrote.
 const DEBUG_HIDDEN_VARS = new Set([
-  '__trace', '__in', '__r', 'GLOBALS', '_GET', '_POST', '_REQUEST', '_SERVER',
-  '_COOKIE', '_SESSION', '_FILES', '_ENV', 'argv', 'argc', 'http_response_header', 'this'
+  "__trace",
+  "__in",
+  "__r",
+  "GLOBALS",
+  "_GET",
+  "_POST",
+  "_REQUEST",
+  "_SERVER",
+  "_COOKIE",
+  "_SESSION",
+  "_FILES",
+  "_ENV",
+  "argv",
+  "argc",
+  "http_response_header",
+  "this",
 ]);
 
 function formatDebugVal(v) {
-  if (v === null || v === undefined) return 'null';
-  if (typeof v === 'boolean') return v ? 'true' : 'false';
-  if (typeof v === 'number') return String(v);
-  if (typeof v === 'string') return JSON.stringify(v);
-  try { return JSON.stringify(v); } catch (e) { return String(v); }
+  if (v === null || v === undefined) return "null";
+  if (typeof v === "boolean") return v ? "true" : "false";
+  if (typeof v === "number") return String(v);
+  if (typeof v === "string") return JSON.stringify(v);
+  try {
+    return JSON.stringify(v);
+  } catch (e) {
+    return String(v);
+  }
 }
 
 function renderDebugVars(vars) {
-  const names = Object.keys(vars || {}).filter(k => !DEBUG_HIDDEN_VARS.has(k)).sort();
-  $('dbgVars').innerHTML = names.length
-    ? names.map(k => '<div class="dbgVarRow"><code class="dbgVarName">$' + esc(k) + '</code><code class="dbgVarVal">' + esc(formatDebugVal(vars[k])) + '</code></div>').join('')
+  const names = Object.keys(vars || {})
+    .filter((k) => !DEBUG_HIDDEN_VARS.has(k))
+    .sort();
+  $("dbgVars").innerHTML = names.length
+    ? names
+        .map(
+          (k) =>
+            '<div class="dbgVarRow"><code class="dbgVarName">$' +
+            esc(k) +
+            '</code><code class="dbgVarVal">' +
+            esc(formatDebugVal(vars[k])) +
+            "</code></div>",
+        )
+        .join("")
     : '<p class="testNote">No variables defined yet at this step.</p>';
 }
 
@@ -130,7 +172,8 @@ function clearDebugHighlight() {
   // dbgHighlightLine = null;` line has executed - var is hoisted but starts out as
   // plain `undefined` until that line runs, not yet `null` - so a strict `!== null`
   // check would wrongly treat that as "there's a real line number to clear".
-  if (dbgHighlightLine != null && docs[mainName]) docs[mainName].removeLineClass(dbgHighlightLine, 'background', 'dbgLine');
+  if (dbgHighlightLine != null && docs[mainName])
+    docs[mainName].removeLineClass(dbgHighlightLine, "background", "dbgLine");
   dbgHighlightLine = null;
 }
 function highlightDebugLine(line) {
@@ -138,7 +181,7 @@ function highlightDebugLine(line) {
   const doc = docs[mainName];
   if (!doc) return;
   const l = Math.max(0, Math.min(line - 1, doc.lineCount() - 1));
-  doc.addLineClass(l, 'background', 'dbgLine');
+  doc.addLineClass(l, "background", "dbgLine");
   dbgHighlightLine = l;
   if (cur === mainName) cm.scrollIntoView({ line: l, ch: 0 }, 80);
 }
@@ -146,19 +189,21 @@ function highlightDebugLine(line) {
 function renderDebugStep(i) {
   const n = debugTrace.length;
   debugStep = n ? Math.max(0, Math.min(i, n - 1)) : 0;
-  $('dbgSlider').max = String(Math.max(0, n - 1));
-  $('dbgSlider').value = String(debugStep);
-  $('dbgSlider').disabled = n === 0;
-  $('dbgFirst').disabled = $('dbgPrev').disabled = n === 0 || debugStep === 0;
-  $('dbgNext').disabled = $('dbgLast').disabled = n === 0 || debugStep >= n - 1;
+  $("dbgSlider").max = String(Math.max(0, n - 1));
+  $("dbgSlider").value = String(debugStep);
+  $("dbgSlider").disabled = n === 0;
+  $("dbgFirst").disabled = $("dbgPrev").disabled = n === 0 || debugStep === 0;
+  $("dbgNext").disabled = $("dbgLast").disabled = n === 0 || debugStep >= n - 1;
   if (n === 0) {
-    $('dbgStepLabel').textContent = ''; $('dbgLineInfo').textContent = '';
-    $('dbgVars').innerHTML = ''; clearDebugHighlight();
+    $("dbgStepLabel").textContent = "";
+    $("dbgLineInfo").textContent = "";
+    $("dbgVars").innerHTML = "";
+    clearDebugHighlight();
     return;
   }
   const entry = debugTrace[debugStep];
-  $('dbgStepLabel').textContent = 'Step ' + (debugStep + 1) + ' of ' + n;
-  $('dbgLineInfo').textContent = 'Line ' + entry.line;
+  $("dbgStepLabel").textContent = "Step " + (debugStep + 1) + " of " + n;
+  $("dbgLineInfo").textContent = "Line " + entry.line;
   renderDebugVars(entry.vars);
   highlightDebugLine(entry.line);
 }
@@ -167,81 +212,129 @@ function renderDebugStep(i) {
 // questions (a trace from a different question's code makes no sense to keep around)
 // and once up front to set up the initial UI.
 function resetDebugState() {
-  debugTrace = []; debugStep = 0; clearDebugHighlight();
-  $('dbgFileName').textContent = mainName || '';
-  $('dbgError').hidden = true; $('dbgError').innerHTML = '';
-  $('dbgBody').hidden = true; $('dbgEmpty').hidden = false;
+  debugTrace = [];
+  debugStep = 0;
+  clearDebugHighlight();
+  $("dbgFileName").textContent = mainName || "";
+  $("dbgError").hidden = true;
+  $("dbgError").innerHTML = "";
+  $("dbgBody").hidden = true;
+  $("dbgEmpty").hidden = false;
 }
 
 function setDebugState(trace, output, errs, flagged) {
   debugTrace = trace || [];
-  $('dbgFileName').textContent = mainName;
+  $("dbgFileName").textContent = mainName;
   if (flagged) {
-    $('dbgError').hidden = false;
-    $('dbgError').innerHTML = '<span class="e">' + esc(output || '') + (errs ? '\n' + esc(errs) : '') + '</span>';
+    $("dbgError").hidden = false;
+    $("dbgError").innerHTML =
+      '<span class="e">' +
+      esc(output || "") +
+      (errs ? "\n" + esc(errs) : "") +
+      "</span>";
   } else {
-    $('dbgError').hidden = true; $('dbgError').innerHTML = '';
+    $("dbgError").hidden = true;
+    $("dbgError").innerHTML = "";
   }
   const hasSteps = debugTrace.length > 0;
-  $('dbgEmpty').hidden = hasSteps;
-  $('dbgBody').hidden = !hasSteps;
+  $("dbgEmpty").hidden = hasSteps;
+  $("dbgBody").hidden = !hasSteps;
   if (!hasSteps && !flagged) {
-    $('dbgEmpty').textContent = 'No statements were recorded - is there any executable PHP code in ' + mainName + '?';
+    $("dbgEmpty").textContent =
+      "No statements were recorded - is there any executable PHP code in " +
+      mainName +
+      "?";
   }
   renderDebugStep(hasSteps ? trace.length - 1 : 0);
 }
 
-const DEBUG_BTN_LABEL = $('debug').innerHTML;
+const DEBUG_BTN_LABEL = $("debug").innerHTML;
 
 async function runDebug() {
-  const btn = $('debug'), runBtn = $('run'), testBtn = $('runTests');
+  const btn = $("debug"),
+    runBtn = $("run"),
+    testBtn = $("runTests");
   if (engineBusy) return;
   engineBusy = true;
-  btn.disabled = true; btn.textContent = 'Debugging…'; runBtn.disabled = true; testBtn.disabled = true;
-  view('debug');
+  btn.disabled = true;
+  btn.textContent = "Debugging…";
+  runBtn.disabled = true;
+  testBtn.disabled = true;
+  view("debug");
   try {
     const main = mainName;
     await phpReady;
-    if (!PhpWeb) throw new Error('The PHP engine could not be loaded (' + (window.__phpErr || 'unknown error') + ').');
+    if (!PhpWeb)
+      throw new Error(
+        "The PHP engine could not be loaded (" +
+          (window.__phpErr || "unknown error") +
+          ").",
+      );
     const instrumented = await instrumentSource(fix(docs[main].getValue()));
-    sinkText = ''; sinkErrs = '';
+    sinkText = "";
+    sinkErrs = "";
     const engine = await getPhp();
-    for (const d of allFolders()) { try { await engine.mkdir('/' + d); } catch (e) {} }
-    for (const n of allNames()) await engine.writeFile('/' + n, n.endsWith('.php') ? fix(docs[n].getValue()) : docs[n].getValue());
-    await engine.run(wrapDebug(instrumented, $('stdin').value, req));
-    const marker = '\n<<<DBGTRACE>>>';
+    for (const d of allFolders()) {
+      try {
+        await engine.mkdir("/" + d);
+      } catch (e) {}
+    }
+    for (const n of allNames())
+      await engine.writeFile(
+        "/" + n,
+        n.endsWith(".php") ? fix(docs[n].getValue()) : docs[n].getValue(),
+      );
+    await engine.run(wrapDebug(instrumented, $("stdin").value, req));
+    const marker = "\n<<<DBGTRACE>>>";
     const idx = sinkText.indexOf(marker);
-    let trace = [], output = sinkText;
+    let trace = [],
+      output = sinkText;
     if (idx !== -1) {
       output = sinkText.slice(0, idx);
-      try { trace = JSON.parse(atob(sinkText.slice(idx + marker.length).trim())); } catch (e) { trace = []; }
+      try {
+        trace = JSON.parse(atob(sinkText.slice(idx + marker.length).trim()));
+      } catch (e) {
+        trace = [];
+      }
     }
     const flagged = !!sinkErrs || PHP_DIAG.test(output);
     // A debug run executes the real program too, so its actual output is shown in the
     // Output/Preview tabs exactly as a normal Run would - the debugger doesn't replace
     // those, it adds a way to see how that output came to be.
-    $('out').innerHTML = (flagged ? '<span class="e">' + esc(output) + (sinkErrs ? '\n' + esc(sinkErrs) : '') + '</span>' : esc(output)) ||
-      '<span class="m">(no output)</span>';
+    $("out").innerHTML =
+      (flagged
+        ? '<span class="e">' +
+          esc(output) +
+          (sinkErrs ? "\n" + esc(sinkErrs) : "") +
+          "</span>"
+        : esc(output)) || '<span class="m">(no output)</span>';
     if (QUESTIONS[key].preview) {
-      const previewScale = (typeof zoomPct !== 'undefined' ? zoomPct : 100) / 100;
-      $('frame').srcdoc = injectZoomStyle(inline(output) + BRIDGE, previewScale);
+      const previewScale =
+        (typeof zoomPct !== "undefined" ? zoomPct : 100) / 100;
+      $("frame").srcdoc = injectZoomStyle(
+        inline(output) + BRIDGE,
+        previewScale,
+      );
     }
     setDebugState(trace, output, sinkErrs, flagged);
   } catch (err) {
     php = null; // the instance may be in a broken state after a JS-level failure
-    setDebugState([], String(err && err.message || err), '', true);
+    setDebugState([], String((err && err.message) || err), "", true);
   }
   engineBusy = false;
-  btn.disabled = false; btn.innerHTML = DEBUG_BTN_LABEL;
-  runBtn.disabled = false; testBtn.disabled = !QUESTIONS[key].tests?.length;
+  btn.disabled = false;
+  btn.innerHTML = DEBUG_BTN_LABEL;
+  runBtn.disabled = false;
+  testBtn.disabled = !QUESTIONS[key].tests?.length;
 }
 
-$('debug').onclick = runDebug;
-$('vDebug').onclick = () => view('debug');
-$('dbgFirst').onclick = () => renderDebugStep(0);
-$('dbgPrev').onclick = () => renderDebugStep(debugStep - 1);
-$('dbgNext').onclick = () => renderDebugStep(debugStep + 1);
-$('dbgLast').onclick = () => renderDebugStep(debugTrace.length - 1);
-$('dbgSlider').oninput = () => renderDebugStep(parseInt($('dbgSlider').value, 10) || 0);
+$("debug").onclick = runDebug;
+$("vDebug").onclick = () => view("debug");
+$("dbgFirst").onclick = () => renderDebugStep(0);
+$("dbgPrev").onclick = () => renderDebugStep(debugStep - 1);
+$("dbgNext").onclick = () => renderDebugStep(debugStep + 1);
+$("dbgLast").onclick = () => renderDebugStep(debugTrace.length - 1);
+$("dbgSlider").oninput = () =>
+  renderDebugStep(parseInt($("dbgSlider").value, 10) || 0);
 
 resetDebugState();
