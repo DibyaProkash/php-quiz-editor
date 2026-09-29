@@ -97,9 +97,17 @@ async function run() {
   $('out').innerHTML = (flagged ? '<span class="e">' + esc(text) + (errs ? '\n' + esc(errs) : '') + '</span>' : esc(text)) ||
     '<span class="m">(no output)</span>';
   if (q.preview) {
+    // Switch to the Preview tab BEFORE writing the new page into the iframe, not
+    // after. Setting srcdoc while the iframe is still hidden (display:none, from
+    // switching away to Output/Tests/Debugger) and then revealing it in the same
+    // tick can race with the iframe's own navigation - the page loads, but the
+    // browser doesn't always paint it, leaving Preview looking blank until
+    // something else forces a repaint (like switching tabs away and back, which is
+    // exactly what was being seen). Showing the iframe first, then loading the page
+    // into an already-visible frame, avoids that race entirely.
+    view(flagged ? 'out' : 'prev');
     const previewScale = (typeof zoomPct !== 'undefined' ? zoomPct : 100) / 100;
     $('frame').srcdoc = injectZoomStyle(inline(text) + BRIDGE, previewScale);
-    view(flagged ? 'out' : 'prev');
   }
   engineBusy = false; btn.disabled = false; btn.textContent = 'Run (Ctrl+Enter)'; tbtn.disabled = !QUESTIONS[key].tests?.length; dbtn.disabled = false;
 }
