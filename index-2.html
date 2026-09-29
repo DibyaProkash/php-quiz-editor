@@ -6,6 +6,7 @@
 <title>PHP Editor</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/show-hint.min.css">
 <style>
 :root{--bg:#1e1f22;--panel:#252629;--line:#3a3c40;--text:#d4d4d4;--muted:#8b8f96;--accent:#4f8cff;--err:#f0716b}
 *{box-sizing:border-box}
@@ -34,23 +35,39 @@ main{flex:1;display:grid;grid-template-columns:210px 1fr 1fr;min-height:0}
 #stdin{display:block;height:90px;resize:vertical;width:100%;background:var(--bg);color:var(--text);border:0;padding:10px 14px;font:14px ui-monospace,Menlo,Consolas,monospace}
 #hints{display:none;padding:10px 14px;background:#2b2d31;border-top:1px solid var(--line);max-height:30%;overflow:auto}
 #hints p{margin:0 0 8px}
-#testPanel{flex:1;overflow:auto;padding:10px 14px}
+#testPanel{flex:1;overflow:auto;padding:12px 14px}
 #testPanel .testNote{margin:8px 0 14px;color:var(--muted);font-size:12.5px;line-height:1.5}
-.testSummary{font-weight:600;margin:0 0 12px;padding:8px 10px;border-radius:6px;background:#2b2d31}
-.testSummary.allpass{color:#5fb878}
-.testCase{border:1px solid var(--line);border-radius:6px;padding:10px 12px;margin-bottom:10px}
-.testCase.pass{border-color:#3f7a4f}
-.testCase.fail{border-color:var(--err)}
-.testHead{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:13px}
-.testIcon{font-weight:700}
+#runTests{display:inline-flex;align-items:center;gap:7px}
+.testRunning{display:flex;align-items:center;gap:9px;color:var(--muted);font-size:13px;margin:0 0 4px}
+.spin{animation:cmspin 1s linear infinite;transform-origin:50% 50%}
+@keyframes cmspin{to{transform:rotate(360deg)}}
+.testSummary{display:flex;align-items:center;gap:12px;margin:0 0 16px;padding:10px 14px;border-radius:8px;background:linear-gradient(180deg,#26282c,#222327);border:1px solid var(--line);box-shadow:0 0 0 1px rgba(95,184,120,.08),0 4px 16px rgba(0,0,0,.3)}
+.testSummary .testSummaryIcon{display:flex;color:#5fb878;filter:drop-shadow(0 0 6px rgba(95,184,120,.7))}
+.testSummary.somefail .testSummaryIcon{color:var(--err);filter:drop-shadow(0 0 6px rgba(240,113,107,.7))}
+.testSummaryText{font-weight:600;font-size:13px;white-space:nowrap;letter-spacing:.2px}
+.testBar{flex:1;height:6px;border-radius:999px;background:var(--line);overflow:hidden}
+.testSummary.somefail .testBar{background:rgba(240,113,107,.2)}
+.testBarFill{height:100%;border-radius:999px;background:linear-gradient(90deg,#3ddc97,#5fb878);box-shadow:0 0 10px rgba(95,184,120,.65);transition:width .5s cubic-bezier(.4,0,.2,1)}
+.testSummary.somefail .testBarFill{background:linear-gradient(90deg,#ff9d97,#f0716b);box-shadow:0 0 10px rgba(240,113,107,.65)}
+.testCase{opacity:0;transform:translateY(4px);animation:testIn .3s ease forwards;border:1px solid var(--line);border-left:3px solid var(--muted);border-radius:8px;padding:10px 12px;margin-bottom:10px;background:#212226;transition:box-shadow .2s ease,border-color .2s ease}
+@keyframes testIn{to{opacity:1;transform:translateY(0)}}
+.testCase.pass{border-left-color:#5fb878}
+.testCase.fail{border-left-color:var(--err)}
+.testCase.pass:hover{box-shadow:0 0 0 1px rgba(95,184,120,.35),0 4px 16px rgba(0,0,0,.35)}
+.testCase.fail:hover{box-shadow:0 0 0 1px rgba(240,113,107,.35),0 4px 16px rgba(0,0,0,.35)}
+.testHead{display:flex;align-items:center;gap:9px;margin-bottom:8px;font-size:13px}
+.testIcon{display:flex;flex:none}
 .testCase.pass .testIcon{color:#5fb878}
 .testCase.fail .testIcon{color:var(--err)}
-.testInput{margin-left:auto;color:var(--muted);font-size:12px}
-.testRow{display:flex;justify-content:space-between;font-size:13px;padding:2px 0}
-.testRow code{background:#1b1c1e;padding:2px 6px;border-radius:3px}
-.testCase details{margin-top:6px}
-.testCase summary{cursor:pointer;color:var(--muted);font-size:12px}
-.testCase pre{margin:6px 0 0;white-space:pre-wrap;word-break:break-word;font-size:12px}
+.testInput{margin-left:auto;color:var(--muted);font-size:11.5px;font-family:ui-monospace,Menlo,Consolas,monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.testRow{display:flex;justify-content:space-between;align-items:center;font-size:12.5px;padding:3px 0}
+.testRow code{background:#1b1c1e;padding:2px 8px;border-radius:999px;font:12px ui-monospace,Menlo,Consolas,monospace}
+.testCase.pass .testRow code.actual{color:#5fb878}
+.testCase.fail .testRow code.actual{color:var(--err)}
+.testCase details{margin-top:8px}
+.testCase summary{cursor:pointer;color:var(--muted);font-size:11.5px}
+.testCase summary:hover{color:var(--text)}
+.testCase pre{margin:6px 0 0;white-space:pre-wrap;word-break:break-word;font-size:11.5px;background:#1b1c1e;padding:8px 10px;border-radius:6px}
 #funcsSection{border-top:1px solid var(--line)}
 #funcsBtn{display:block;width:100%;text-align:left;border:0;border-radius:0;background:#2b2d31;color:var(--muted);padding:8px 14px;font-size:13px}
 #funcsBtn:hover{color:var(--text);background:#2b2d31}
@@ -64,6 +81,19 @@ main{flex:1;display:grid;grid-template-columns:210px 1fr 1fr;min-height:0}
 .tools{display:flex;border-left:1px solid var(--line)}
 .tools button{display:flex;align-items:center;padding:6px 12px}
 .tools button:disabled{opacity:.35;cursor:default}
+#formatMsg{padding:6px 14px;font-size:12.5px;border-bottom:1px solid var(--line);background:#22262b}
+#formatMsg.ok{color:#5fb878;background:#1c2620}
+#formatMsg.e{color:var(--err);background:#2a1e1e}
+
+/* Autocomplete ("intellisense") popup - dark theme to match the editor, plus
+   category coloring: keywords, built-in functions, and $variables each get their own tint. */
+.CodeMirror-hints{background:#26282c;border:1px solid var(--line);border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.45);font:13px ui-monospace,Menlo,Consolas,monospace;padding:4px 0}
+.CodeMirror-hint{color:var(--text);padding:4px 12px}
+li.CodeMirror-hint-active{background:var(--accent);color:#fff}
+.cm-hint-kw{color:#c586c0}
+.cm-hint-fn{color:#dcdcaa}
+.cm-hint-var{color:#4fc1ff}
+li.CodeMirror-hint-active.cm-hint-kw,li.CodeMirror-hint-active.cm-hint-fn,li.CodeMirror-hint-active.cm-hint-var{color:#fff}
 
 .explorer{background:var(--panel);border-right:1px solid var(--line);overflow:auto;min-width:0}
 .explorer h2{margin:0;padding:8px 14px;font-size:12px;font-weight:600;color:var(--muted)}
@@ -121,7 +151,8 @@ main{flex:1;display:grid;grid-template-columns:210px 1fr 1fr;min-height:0}
 <main>
   <nav class="explorer" aria-label="Files"><div class="ehead"><h2>Files</h2><div class="etools"><button id="newFile" title="New file" aria-label="New file"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M12 12v6M9 15h6"/></svg></button><button id="newFolder" title="New folder" aria-label="New folder"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 11v6M9 14h6"/></svg></button></div></div><div id="newRow" hidden><input id="newName" maxlength="40" spellcheck="false" autocomplete="off" placeholder="helpers.php" aria-label="New file or folder name"><div id="newErr" role="alert"></div></div><div class="list" id="explorer"></div></nav>
   <section class="editor">
-    <div class="bar"><div id="filetabs"></div><div class="tools"><button id="undo" title="Undo (Ctrl+Z)" aria-label="Undo" disabled><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg></button><button id="redo" title="Redo (Ctrl+Y)" aria-label="Redo" disabled><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 14 20 9 15 4"/><path d="M4 20v-7a4 4 0 0 1 4-4h12"/></svg></button></div></div>
+    <div class="bar"><div id="filetabs"></div><div class="tools"><button id="format" title="Format code (Shift+Alt+F)" aria-label="Format code"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><path d="M13.5 1C13.7761 1 14 1.22386 14 1.5V2H14.5C14.7761 2 15 2.22386 15 2.5C15 2.77614 14.7761 3 14.5 3H14V3.5C14 3.77614 13.7761 4 13.5 4C13.2239 4 13 3.77614 13 3.5V3H12.5C12.2239 3 12 2.77614 12 2.5C12 2.22386 12.2239 2 12.5 2H13V1.5C13 1.22386 13.2239 1 13.5 1ZM3.5 3C3.77615 3 4 3.22386 4 3.5V4H4.5C4.77615 4 5 4.22386 5 4.5C5 4.77614 4.77615 5 4.5 5H4V5.5C4 5.77614 3.77615 6 3.5 6C3.22386 6 3 5.77614 3 5.5V5H2.5C2.22386 5 2 4.77614 2 4.5C2 4.22386 2.22386 4 2.5 4H3V3.5C3 3.22386 3.22386 3 3.5 3ZM12.5 12C12.7761 12 13 11.7761 13 11.5C13 11.2239 12.7761 11 12.5 11H12V10.5C12 10.2239 11.7761 10 11.5 10C11.2239 10 11 10.2239 11 10.5V11H10.5C10.2239 11 10 11.2239 10 11.5C10 11.7761 10.2239 12 10.5 12H11V12.5C11 12.7761 11.2239 13 11.5 13C11.7761 13 12 12.7761 12 12.5V12H12.5ZM8.72956 4.56346C9.4771 3.81592 10.6891 3.81592 11.4367 4.56347C12.1842 5.31102 12.1842 6.52303 11.4367 7.27058L4.26679 14.4404C3.51924 15.1879 2.30723 15.1879 1.55968 14.4404C0.812134 13.6928 0.812138 12.4808 1.55969 11.7333L8.72956 4.56346Z" fill="currentColor" stroke="none"/></svg></button><button id="undo" title="Undo (Ctrl+Z)" aria-label="Undo" disabled><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg></button><button id="redo" title="Redo (Ctrl+Y)" aria-label="Redo" disabled><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 14 20 9 15 4"/><path d="M4 20v-7a4 4 0 0 1 4-4h12"/></svg></button></div></div>
+    <div id="formatMsg" hidden role="alert"></div>
     <textarea id="code"></textarea>
   </section>
   <section class="side">
@@ -162,6 +193,7 @@ main{flex:1;display:grid;grid-template-columns:210px 1fr 1fr;min-height:0}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/php/php.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/show-hint.min.js"></script>
 
 <script>
 let PhpWeb = null;
@@ -526,6 +558,15 @@ function icon(name) {
 }
 const PLAY = '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M7 4l13 8-13 8z"/></svg>';
 const PEN = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20l4-1 11-11-3-3L5 16z"/></svg>';
+
+/* Test-result and formatting icons: VS Code's own Codicons (MIT licensed) - the exact
+   glyphs the built-in Test Explorer uses for a passed test, a failed test, and a
+   running/spinning state, plus the wand icon for "Format code". */
+const TEST_PASS = '<svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M8 1C4.14 1 1 4.14 1 8C1 11.86 4.14 15 8 15C11.86 15 15 11.86 15 8C15 4.14 11.86 1 8 1ZM11.354 6.354L7.354 10.354C7.256 10.452 7.128 10.5 7 10.5C6.872 10.5 6.744 10.451 6.646 10.354L4.646 8.354C4.451 8.159 4.451 7.842 4.646 7.647C4.841 7.452 5.158 7.452 5.353 7.647L6.999 9.293L10.645 5.647C10.84 5.452 11.157 5.452 11.352 5.647C11.547 5.842 11.547 6.159 11.352 6.354H11.354Z"/></svg>';
+const TEST_FAIL = '<svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M8 1C4.14 1 1 4.14 1 8C1 11.86 4.14 15 8 15C11.86 15 15 11.86 15 8C15 4.14 11.86 1 8 1ZM8 14C4.691 14 2 11.309 2 8C2 4.691 4.691 2 8 2C11.309 2 14 4.691 14 8C14 11.309 11.309 14 8 14ZM10.854 5.854L8.708 8L10.854 10.146C11.049 10.341 11.049 10.658 10.854 10.853C10.756 10.951 10.628 10.999 10.5 10.999C10.372 10.999 10.244 10.95 10.146 10.853L8 8.707L5.854 10.853C5.756 10.951 5.628 10.999 5.5 10.999C5.372 10.999 5.244 10.95 5.146 10.853C4.951 10.658 4.951 10.341 5.146 10.146L7.292 8L5.146 5.854C4.951 5.659 4.951 5.342 5.146 5.147C5.341 4.952 5.658 4.952 5.853 5.147L7.999 7.293L10.145 5.147C10.34 4.952 10.657 4.952 10.852 5.147C11.047 5.342 11.047 5.659 10.852 5.854H10.854Z"/></svg>';
+const TEST_SPIN = '<svg class="spin" viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M13.5 8.5C13.224 8.5 13 8.276 13 8C13 5.243 10.757 3 8 3C5.243 3 3 5.243 3 8C3 8.276 2.776 8.5 2.5 8.5C2.224 8.5 2 8.276 2 8C2 4.691 4.691 2 8 2C11.309 2 14 4.691 14 8C14 8.276 13.776 8.5 13.5 8.5Z"/></svg>';
+const WAND = '<svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M13.5 1C13.7761 1 14 1.22386 14 1.5V2H14.5C14.7761 2 15 2.22386 15 2.5C15 2.77614 14.7761 3 14.5 3H14V3.5C14 3.77614 13.7761 4 13.5 4C13.2239 4 13 3.77614 13 3.5V3H12.5C12.2239 3 12 2.77614 12 2.5C12 2.22386 12.2239 2 12.5 2H13V1.5C13 1.22386 13.2239 1 13.5 1ZM3.5 3C3.77615 3 4 3.22386 4 3.5V4H4.5C4.77615 4 5 4.22386 5 4.5C5 4.77614 4.77615 5 4.5 5H4V5.5C4 5.77614 3.77615 6 3.5 6C3.22386 6 3 5.77614 3 5.5V5H2.5C2.22386 5 2 4.77614 2 4.5C2 4.22386 2.22386 4 2.5 4H3V3.5C3 3.22386 3.22386 3 3.5 3ZM12.5 12C12.7761 12 13 11.7761 13 11.5C13 11.2239 12.7761 11 12.5 11H12V10.5C12 10.2239 11.7761 10 11.5 10C11.2239 10 11 10.2239 11 10.5V11H10.5C10.2239 11 10 11.2239 10 11.5C10 11.7761 10.2239 12 10.5 12H11V12.5C11 12.7761 11.2239 13 11.5 13C11.7761 13 12 12.7761 12 12.5V12H12.5ZM8.72956 4.56346C9.4771 3.81592 10.6891 3.81592 11.4367 4.56347C12.1842 5.31102 12.1842 6.52303 11.4367 7.27058L4.26679 14.4404C3.51924 15.1879 2.30723 15.1879 1.55968 14.4404C0.812134 13.6928 0.812138 12.4808 1.55969 11.7333L8.72956 4.56346ZM8.25002 6.4572L2.26679 12.4404C1.90977 12.7974 1.90977 13.3763 2.26679 13.7333C2.62381 14.0903 3.20266 14.0903 3.55968 13.7333L9.54292 7.75009L8.25002 6.4572ZM10.25 7.04299L10.7295 6.56347C11.0866 6.20645 11.0866 5.6276 10.7296 5.27057C10.3725 4.91355 9.79368 4.91355 9.43666 5.27057L8.95713 5.7501L10.25 7.04299Z"/></svg>';
+const BEAKER = '<svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M12 0.998993C12.276 0.998993 12.5 1.22299 12.5 1.49899C12.5 1.77499 12.276 1.99899 12 1.99899H11.004V6.68299C11.004 7.26299 11.148 7.83299 11.423 8.34299L13.819 12.789C14.358 13.788 13.634 15.001 12.499 15.001H3.50101C2.36501 15.001 1.64301 13.788 2.18101 12.789L4.57501 8.34499C4.85001 7.83499 4.99401 7.26399 4.99401 6.68499V1.99899H4.00001C3.72401 1.99899 3.50001 1.77499 3.50001 1.49899C3.50001 1.22299 3.72401 0.998993 4.00001 0.998993H12ZM5.99401 1.99899V6.68599C5.99401 7.43099 5.80901 8.16399 5.45601 8.81999L4.82101 9.99899H11.18L10.543 8.81699C10.19 8.16099 10.005 7.42799 10.005 6.68199V1.99899H5.99401ZM11.718 10.999H4.28201L3.06201 13.263C2.88201 13.597 3.12401 14 3.50201 14H12.499C12.877 14 13.119 13.596 12.939 13.263L11.718 10.999Z"/></svg>';
 function actBtn(cls, title, svg, fn) {
   const b = document.createElement('button');
   b.className = cls; b.title = title; b.setAttribute('aria-label', title); b.innerHTML = svg; b.onclick = fn;
@@ -574,6 +615,8 @@ function showFile(name) {
   cm.swapDoc(docs[name]);
   updHist();
   cm.setOption('readOnly', metaOf(name).editable ? false : 'nocursor');
+  $('format').disabled = !(metaOf(name).editable && name.endsWith('.php'));
+  $('formatMsg').hidden = true;
   renderTabs();
 }
 // Returns an error message, or '' when the path is fine. `ignore` = the item being renamed.
@@ -681,7 +724,11 @@ function undoDelete() {
 const cm = CodeMirror.fromTextArea($('code'), {
   theme: 'material-darker', lineNumbers: true, matchBrackets: true, autoCloseBrackets: true,
   indentUnit: 4, indentWithTabs: false, undoDepth: 1000, historyEventDelay: 400,
-  extraKeys: { 'Ctrl-Enter': () => runFresh(), 'Cmd-Enter': () => runFresh(), Tab: c => c.replaceSelection('    ') }
+  extraKeys: {
+    'Ctrl-Enter': () => runFresh(), 'Cmd-Enter': () => runFresh(), Tab: c => c.replaceSelection('    '),
+    'Ctrl-Space': c => CodeMirror.showHint(c, phpHint, { completeSingle: false }),
+    'Shift-Alt-F': () => formatCurrentFile()
+  }
 });
 
 function renameRow(path, isFolder, depth) {
@@ -781,7 +828,7 @@ function loadQuestion() {
   $('frame').srcdoc = '<p style="font:14px system-ui;color:#777;padding:16px">Press Run to see your page here.</p>';
   const tests = q.tests || [];
   $('vTests').hidden = !tests.length;
-  $('runTests').textContent = 'Run tests (' + tests.length + ')'; $('runTests').disabled = false;
+  $('runTests').innerHTML = BEAKER + ' Run tests (' + tests.length + ')'; $('runTests').disabled = false;
   $('testResults').innerHTML = '';
   const funcs = q.functions || [];
   $('funcsSection').hidden = !funcs.length;
@@ -1009,14 +1056,18 @@ async function runOneTest(t) {
 }
 
 function renderTestResults(rows) {
-  const passed = rows.filter(x => x.r.ok).length;
+  const passed = rows.filter(x => x.r.ok).length, total = rows.length, pct = total ? Math.round(100 * passed / total) : 0;
   $('testResults').innerHTML =
-    '<p class="testSummary' + (passed === rows.length ? ' allpass' : '') + '">' + passed + ' / ' + rows.length + ' tests passing</p>' +
-    rows.map(({ t, r }, i) => '<div class="testCase ' + (r.ok ? 'pass' : 'fail') + '">' +
-      '<div class="testHead"><span class="testIcon" aria-hidden="true">' + (r.ok ? '✓' : '✗') + '</span>' +
+    '<div class="testSummary' + (passed === total ? '' : ' somefail') + '">' +
+      '<span class="testSummaryIcon">' + (passed === total ? TEST_PASS : TEST_FAIL) + '</span>' +
+      '<span class="testSummaryText">' + passed + ' / ' + total + ' passing</span>' +
+      '<div class="testBar"><div class="testBarFill" style="width:' + pct + '%"></div></div>' +
+    '</div>' +
+    rows.map(({ t, r }, i) => '<div class="testCase ' + (r.ok ? 'pass' : 'fail') + '" style="animation-delay:' + (i * 55) + 'ms">' +
+      '<div class="testHead"><span class="testIcon">' + (r.ok ? TEST_PASS : TEST_FAIL) + '</span>' +
       '<strong>Test ' + (i + 1) + '</strong><span class="testInput">' + esc(t.label) + '</span></div>' +
       '<div class="testRow"><span>Expected final amount</span><code>$' + esc(t.expectFinal) + '</code></div>' +
-      '<div class="testRow"><span>Your final amount</span><code>' + (r.actual !== null ? '$' + esc(r.actual) : '(none)') + '</code></div>' +
+      '<div class="testRow"><span>Your final amount</span><code class="actual">' + (r.actual !== null ? '$' + esc(r.actual) : '(none)') + '</code></div>' +
       (r.diag ? '<details><summary>See what the PHP interpreter produced</summary><pre class="e">' + esc(r.diag) + '</pre></details>' : '') +
       '</div>'
     ).join('');
@@ -1025,14 +1076,139 @@ function renderTestResults(rows) {
 async function runTests() {
   const q = QUESTIONS[key], runBtn = $('run'), testBtn = $('runTests');
   if (engineBusy || !q.tests?.length) return;
-  engineBusy = true; runBtn.disabled = true; testBtn.disabled = true; testBtn.textContent = 'Running tests…';
-  $('testResults').innerHTML = '<p class="m">Running ' + q.tests.length + ' test(s) against your code…</p>';
+  engineBusy = true; runBtn.disabled = true; testBtn.disabled = true; testBtn.innerHTML = TEST_SPIN + ' Running tests…';
+  $('testResults').innerHTML = '<p class="testRunning">' + TEST_SPIN + ' Running ' + q.tests.length + ' test(s) against your code…</p>';
   const rows = [];
   for (const t of q.tests) rows.push({ t, r: await runOneTest(t) });
   renderTestResults(rows);
-  engineBusy = false; runBtn.disabled = false; testBtn.disabled = false; testBtn.textContent = 'Run tests (' + q.tests.length + ')';
+  engineBusy = false; runBtn.disabled = false; testBtn.disabled = false; testBtn.innerHTML = BEAKER + ' Run tests (' + q.tests.length + ')';
 }
 $('runTests').onclick = runTests;
+
+// Lightweight PHP autocomplete (CodeMirror's show-hint addon + a custom hint source).
+// Not full semantic IntelliSense - there's no real PHP type-checker running here - but it
+// suggests PHP keywords, common built-in functions, superglobals, and any $variable or
+// function the student has already typed elsewhere in the file, the moment they start
+// typing a word, the way VS Code's basic word/keyword suggestions behave.
+
+const PHP_KEYWORDS = ['abstract', 'and', 'array', 'as', 'break', 'callable', 'case', 'catch', 'class', 'clone',
+  'const', 'continue', 'declare', 'default', 'do', 'echo', 'else', 'elseif', 'empty', 'enddeclare', 'endfor',
+  'endforeach', 'endif', 'endswitch', 'endwhile', 'enum', 'extends', 'final', 'finally', 'fn', 'for', 'foreach',
+  'function', 'global', 'goto', 'if', 'implements', 'include', 'include_once', 'instanceof', 'insteadof',
+  'interface', 'isset', 'list', 'match', 'namespace', 'new', 'or', 'print', 'private', 'protected', 'public',
+  'readonly', 'require', 'require_once', 'return', 'static', 'switch', 'throw', 'trait', 'try', 'unset', 'use',
+  'var', 'while', 'xor', 'yield', 'true', 'false', 'null', 'self', 'parent'];
+
+const PHP_SUPERGLOBALS = ['$_GET', '$_POST', '$_SERVER', '$_SESSION', '$_COOKIE', '$_FILES', '$_ENV', '$_REQUEST', '$GLOBALS'];
+
+const PHP_BUILTINS = [
+  'strlen', 'strtolower', 'strtoupper', 'trim', 'ltrim', 'rtrim', 'str_replace', 'str_pad', 'str_repeat', 'substr',
+  'sprintf', 'printf', 'explode', 'implode', 'number_format', 'str_contains', 'str_starts_with', 'str_ends_with',
+  'str_split', 'ucfirst', 'ucwords', 'wordwrap', 'nl2br', 'htmlspecialchars',
+  'array_sum', 'array_map', 'array_filter', 'array_merge', 'array_keys', 'array_values', 'array_search', 'in_array',
+  'array_key_exists', 'count', 'sort', 'rsort', 'usort', 'array_reverse', 'array_slice', 'array_push', 'array_pop',
+  'array_shift', 'array_unshift', 'array_unique', 'array_combine', 'array_fill', 'array_flip',
+  'round', 'floor', 'ceil', 'abs', 'max', 'min', 'rand', 'mt_rand', 'intdiv', 'pow', 'sqrt',
+  'isset', 'empty', 'unset', 'is_array', 'is_string', 'is_numeric', 'is_int', 'is_float', 'is_bool', 'is_null',
+  'is_callable', 'gettype', 'settype', 'intval', 'floatval', 'strval', 'boolval',
+  'var_dump', 'print_r', 'var_export', 'date', 'time', 'strtotime', 'json_encode', 'json_decode',
+  'preg_match', 'preg_replace', 'preg_split', 'function_exists', 'method_exists', 'class_exists',
+  'define', 'defined', 'func_get_args', 'call_user_func'
+];
+
+function phpHint(cmInst) {
+  const cursor = cmInst.getCursor(), line = cmInst.getLine(cursor.line);
+  let start = cursor.ch;
+  while (start && /[\w$]/.test(line.charAt(start - 1))) start--;
+  const word = line.slice(start, cursor.ch);
+  if (!word) return null;
+  const isVar = word.charAt(0) === '$';
+  const seen = new Set(), list = [];
+  const add = (text, className) => { if (!seen.has(text)) { seen.add(text); list.push({ text, className }); } };
+  const all = cmInst.getValue();
+  if (isVar) {
+    PHP_SUPERGLOBALS.forEach(v => add(v, 'cm-hint-var'));
+    const re = /\$[A-Za-z_][A-Za-z0-9_]*/g; let m;
+    while ((m = re.exec(all))) add(m[0], 'cm-hint-var');
+  } else {
+    PHP_KEYWORDS.forEach(k => add(k, 'cm-hint-kw'));
+    PHP_BUILTINS.forEach(f => add(f + '(', 'cm-hint-fn'));
+    const re = /function\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(/g; let m;
+    while ((m = re.exec(all))) add(m[1] + '(', 'cm-hint-fn');
+  }
+  const wlow = word.toLowerCase();
+  const filtered = list.filter(it => it.text.toLowerCase().startsWith(wlow)).sort((a, b) => a.text.localeCompare(b.text));
+  if (!filtered.length) return null;
+  return { list: filtered, from: CodeMirror.Pos(cursor.line, start), to: CodeMirror.Pos(cursor.line, cursor.ch) };
+}
+
+// Auto-trigger on typing, like VS Code's default suggest-as-you-type - but only in
+// editable .php files, and only for word/variable characters (not every keystroke).
+cm.on('inputRead', (instance, change) => {
+  if (!cur.endsWith('.php') || !metaOf(cur).editable) return;
+  if (change.origin !== '+input' || change.text.length !== 1 || !/[\w$]/.test(change.text[0])) return;
+  if (instance.state.completionActive) return;
+  CodeMirror.showHint(instance, phpHint, { completeSingle: false });
+});
+
+// "Format code" (Shift+Alt+F) - a REAL PHP code formatter, not a fake indenter.
+// Runs Prettier (https://prettier.io) with the community @prettier/plugin-php parser,
+// entirely in the browser. Both are loaded lazily, only the first time a student
+// actually presses Format, so a proctored exam session never pays for this download
+// unless someone uses it.
+const PRETTIER_JS = 'https://cdn.jsdelivr.net/npm/prettier@3.9.9/standalone.js';
+const PRETTIER_PHP_JS = 'https://cdn.jsdelivr.net/npm/@prettier/plugin-php@0.25.0/standalone.js';
+
+function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = src; s.onload = () => resolve(); s.onerror = () => reject(new Error('Could not load ' + src));
+    document.head.appendChild(s);
+  });
+}
+let prettierReady = null;
+function ensurePrettier() {
+  if (!prettierReady) {
+    prettierReady = (async () => {
+      if (!window.prettier) await loadScript(PRETTIER_JS);
+      if (!window.prettierPlugins || !window.prettierPlugins.php) await loadScript(PRETTIER_PHP_JS);
+    })();
+  }
+  return prettierReady;
+}
+
+let formatMsgTimer = null;
+function showFormatMsg(text, isError) {
+  const el = $('formatMsg');
+  clearTimeout(formatMsgTimer);
+  el.textContent = text; el.className = isError ? 'e' : 'ok'; el.hidden = false;
+  formatMsgTimer = setTimeout(() => { el.hidden = true; }, isError ? 6000 : 2200);
+}
+
+async function formatCurrentFile() {
+  const btn = $('format');
+  if (btn.disabled || !cur.endsWith('.php') || !metaOf(cur).editable) return;
+  btn.disabled = true;
+  try {
+    await ensurePrettier();
+    const before = cm.getValue();
+    const after = await prettier.format(before, {
+      parser: 'php', plugins: [prettierPlugins.php], tabWidth: 4, printWidth: 100, singleQuote: true, phpVersion: '8.4'
+    });
+    if (after !== before) {
+      const last = cm.lastLine();
+      cm.replaceRange(after, { line: 0, ch: 0 }, { line: last, ch: cm.getLine(last).length }, 'format');
+      showFormatMsg('Code formatted.', false);
+    } else {
+      showFormatMsg('Already formatted - nothing to change.', false);
+    }
+  } catch (err) {
+    const msg = String(err && err.message || err).split('\n')[0];
+    showFormatMsg("Can't format: your PHP has a syntax problem (" + msg + '). Fix it and try again.', true);
+  }
+  btn.disabled = false;
+}
+$('format').onclick = formatCurrentFile;
 
 </script>
 </body>

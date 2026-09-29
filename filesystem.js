@@ -40,6 +40,8 @@ function showFile(name) {
   cm.swapDoc(docs[name]);
   updHist();
   cm.setOption('readOnly', metaOf(name).editable ? false : 'nocursor');
+  $('format').disabled = !(metaOf(name).editable && name.endsWith('.php'));
+  $('formatMsg').hidden = true;
   renderTabs();
 }
 // Returns an error message, or '' when the path is fine. `ignore` = the item being renamed.

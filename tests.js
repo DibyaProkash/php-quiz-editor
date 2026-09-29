@@ -29,14 +29,18 @@ async function runOneTest(t) {
 }
 
 function renderTestResults(rows) {
-  const passed = rows.filter(x => x.r.ok).length;
+  const passed = rows.filter(x => x.r.ok).length, total = rows.length, pct = total ? Math.round(100 * passed / total) : 0;
   $('testResults').innerHTML =
-    '<p class="testSummary' + (passed === rows.length ? ' allpass' : '') + '">' + passed + ' / ' + rows.length + ' tests passing</p>' +
-    rows.map(({ t, r }, i) => '<div class="testCase ' + (r.ok ? 'pass' : 'fail') + '">' +
-      '<div class="testHead"><span class="testIcon" aria-hidden="true">' + (r.ok ? '✓' : '✗') + '</span>' +
+    '<div class="testSummary' + (passed === total ? '' : ' somefail') + '">' +
+      '<span class="testSummaryIcon">' + (passed === total ? TEST_PASS : TEST_FAIL) + '</span>' +
+      '<span class="testSummaryText">' + passed + ' / ' + total + ' passing</span>' +
+      '<div class="testBar"><div class="testBarFill" style="width:' + pct + '%"></div></div>' +
+    '</div>' +
+    rows.map(({ t, r }, i) => '<div class="testCase ' + (r.ok ? 'pass' : 'fail') + '" style="animation-delay:' + (i * 55) + 'ms">' +
+      '<div class="testHead"><span class="testIcon">' + (r.ok ? TEST_PASS : TEST_FAIL) + '</span>' +
       '<strong>Test ' + (i + 1) + '</strong><span class="testInput">' + esc(t.label) + '</span></div>' +
       '<div class="testRow"><span>Expected final amount</span><code>$' + esc(t.expectFinal) + '</code></div>' +
-      '<div class="testRow"><span>Your final amount</span><code>' + (r.actual !== null ? '$' + esc(r.actual) : '(none)') + '</code></div>' +
+      '<div class="testRow"><span>Your final amount</span><code class="actual">' + (r.actual !== null ? '$' + esc(r.actual) : '(none)') + '</code></div>' +
       (r.diag ? '<details><summary>See what the PHP interpreter produced</summary><pre class="e">' + esc(r.diag) + '</pre></details>' : '') +
       '</div>'
     ).join('');
@@ -45,11 +49,11 @@ function renderTestResults(rows) {
 async function runTests() {
   const q = QUESTIONS[key], runBtn = $('run'), testBtn = $('runTests');
   if (engineBusy || !q.tests?.length) return;
-  engineBusy = true; runBtn.disabled = true; testBtn.disabled = true; testBtn.textContent = 'Running tests…';
-  $('testResults').innerHTML = '<p class="m">Running ' + q.tests.length + ' test(s) against your code…</p>';
+  engineBusy = true; runBtn.disabled = true; testBtn.disabled = true; testBtn.innerHTML = TEST_SPIN + ' Running tests…';
+  $('testResults').innerHTML = '<p class="testRunning">' + TEST_SPIN + ' Running ' + q.tests.length + ' test(s) against your code…</p>';
   const rows = [];
   for (const t of q.tests) rows.push({ t, r: await runOneTest(t) });
   renderTestResults(rows);
-  engineBusy = false; runBtn.disabled = false; testBtn.disabled = false; testBtn.textContent = 'Run tests (' + q.tests.length + ')';
+  engineBusy = false; runBtn.disabled = false; testBtn.disabled = false; testBtn.innerHTML = BEAKER + ' Run tests (' + q.tests.length + ')';
 }
 $('runTests').onclick = runTests;

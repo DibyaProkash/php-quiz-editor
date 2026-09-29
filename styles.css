@@ -25,10 +25,65 @@ main{flex:1;display:grid;grid-template-columns:210px 1fr 1fr;min-height:0}
 #stdin{display:block;height:90px;resize:vertical;width:100%;background:var(--bg);color:var(--text);border:0;padding:10px 14px;font:14px ui-monospace,Menlo,Consolas,monospace}
 #hints{display:none;padding:10px 14px;background:#2b2d31;border-top:1px solid var(--line);max-height:30%;overflow:auto}
 #hints p{margin:0 0 8px}
+#testPanel{flex:1;overflow:auto;padding:12px 14px}
+#testPanel .testNote{margin:8px 0 14px;color:var(--muted);font-size:12.5px;line-height:1.5}
+#runTests{display:inline-flex;align-items:center;gap:7px}
+.testRunning{display:flex;align-items:center;gap:9px;color:var(--muted);font-size:13px;margin:0 0 4px}
+.spin{animation:cmspin 1s linear infinite;transform-origin:50% 50%}
+@keyframes cmspin{to{transform:rotate(360deg)}}
+.testSummary{display:flex;align-items:center;gap:12px;margin:0 0 16px;padding:10px 14px;border-radius:8px;background:linear-gradient(180deg,#26282c,#222327);border:1px solid var(--line);box-shadow:0 0 0 1px rgba(95,184,120,.08),0 4px 16px rgba(0,0,0,.3)}
+.testSummary .testSummaryIcon{display:flex;color:#5fb878;filter:drop-shadow(0 0 6px rgba(95,184,120,.7))}
+.testSummary.somefail .testSummaryIcon{color:var(--err);filter:drop-shadow(0 0 6px rgba(240,113,107,.7))}
+.testSummaryText{font-weight:600;font-size:13px;white-space:nowrap;letter-spacing:.2px}
+.testBar{flex:1;height:6px;border-radius:999px;background:var(--line);overflow:hidden}
+.testSummary.somefail .testBar{background:rgba(240,113,107,.2)}
+.testBarFill{height:100%;border-radius:999px;background:linear-gradient(90deg,#3ddc97,#5fb878);box-shadow:0 0 10px rgba(95,184,120,.65);transition:width .5s cubic-bezier(.4,0,.2,1)}
+.testSummary.somefail .testBarFill{background:linear-gradient(90deg,#ff9d97,#f0716b);box-shadow:0 0 10px rgba(240,113,107,.65)}
+.testCase{opacity:0;transform:translateY(4px);animation:testIn .3s ease forwards;border:1px solid var(--line);border-left:3px solid var(--muted);border-radius:8px;padding:10px 12px;margin-bottom:10px;background:#212226;transition:box-shadow .2s ease,border-color .2s ease}
+@keyframes testIn{to{opacity:1;transform:translateY(0)}}
+.testCase.pass{border-left-color:#5fb878}
+.testCase.fail{border-left-color:var(--err)}
+.testCase.pass:hover{box-shadow:0 0 0 1px rgba(95,184,120,.35),0 4px 16px rgba(0,0,0,.35)}
+.testCase.fail:hover{box-shadow:0 0 0 1px rgba(240,113,107,.35),0 4px 16px rgba(0,0,0,.35)}
+.testHead{display:flex;align-items:center;gap:9px;margin-bottom:8px;font-size:13px}
+.testIcon{display:flex;flex:none}
+.testCase.pass .testIcon{color:#5fb878}
+.testCase.fail .testIcon{color:var(--err)}
+.testInput{margin-left:auto;color:var(--muted);font-size:11.5px;font-family:ui-monospace,Menlo,Consolas,monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.testRow{display:flex;justify-content:space-between;align-items:center;font-size:12.5px;padding:3px 0}
+.testRow code{background:#1b1c1e;padding:2px 8px;border-radius:999px;font:12px ui-monospace,Menlo,Consolas,monospace}
+.testCase.pass .testRow code.actual{color:#5fb878}
+.testCase.fail .testRow code.actual{color:var(--err)}
+.testCase details{margin-top:8px}
+.testCase summary{cursor:pointer;color:var(--muted);font-size:11.5px}
+.testCase summary:hover{color:var(--text)}
+.testCase pre{margin:6px 0 0;white-space:pre-wrap;word-break:break-word;font-size:11.5px;background:#1b1c1e;padding:8px 10px;border-radius:6px}
+#funcsSection{border-top:1px solid var(--line)}
+#funcsBtn{display:block;width:100%;text-align:left;border:0;border-radius:0;background:#2b2d31;color:var(--muted);padding:8px 14px;font-size:13px}
+#funcsBtn:hover{color:var(--text);background:#2b2d31}
+#funcsPanel{padding:6px 14px 10px;max-height:240px;overflow:auto;background:#242629}
+.funcItem{padding:8px 0;border-top:1px solid var(--line)}
+.funcItem:first-child{border-top:0}
+.funcSig{display:block;color:var(--accent);font-size:12.5px;margin-bottom:3px;word-break:break-word}
+.funcItem p{margin:0 0 6px;font-size:12.5px;color:var(--text);line-height:1.45}
+.funcExample{margin:0;font-size:12px;color:var(--muted);background:#1b1c1e;padding:6px 8px;border-radius:4px;overflow-x:auto;white-space:pre}
 #filetabs{display:flex;flex:1;min-width:0;align-items:stretch;overflow-x:auto}
 .tools{display:flex;border-left:1px solid var(--line)}
 .tools button{display:flex;align-items:center;padding:6px 12px}
 .tools button:disabled{opacity:.35;cursor:default}
+#formatMsg{padding:6px 14px;font-size:12.5px;border-bottom:1px solid var(--line);background:#22262b}
+#formatMsg.ok{color:#5fb878;background:#1c2620}
+#formatMsg.e{color:var(--err);background:#2a1e1e}
+
+/* Autocomplete ("intellisense") popup - dark theme to match the editor, plus
+   category coloring: keywords, built-in functions, and $variables each get their own tint. */
+.CodeMirror-hints{background:#26282c;border:1px solid var(--line);border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.45);font:13px ui-monospace,Menlo,Consolas,monospace;padding:4px 0}
+.CodeMirror-hint{color:var(--text);padding:4px 12px}
+li.CodeMirror-hint-active{background:var(--accent);color:#fff}
+.cm-hint-kw{color:#c586c0}
+.cm-hint-fn{color:#dcdcaa}
+.cm-hint-var{color:#4fc1ff}
+li.CodeMirror-hint-active.cm-hint-kw,li.CodeMirror-hint-active.cm-hint-fn,li.CodeMirror-hint-active.cm-hint-var{color:#fff}
 
 .explorer{background:var(--panel);border-right:1px solid var(--line);overflow:auto;min-width:0}
 .explorer h2{margin:0;padding:8px 14px;font-size:12px;font-weight:600;color:var(--muted)}
