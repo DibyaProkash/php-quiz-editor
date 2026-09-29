@@ -34,6 +34,32 @@ main{flex:1;display:grid;grid-template-columns:210px 1fr 1fr;min-height:0}
 #stdin{display:block;height:90px;resize:vertical;width:100%;background:var(--bg);color:var(--text);border:0;padding:10px 14px;font:14px ui-monospace,Menlo,Consolas,monospace}
 #hints{display:none;padding:10px 14px;background:#2b2d31;border-top:1px solid var(--line);max-height:30%;overflow:auto}
 #hints p{margin:0 0 8px}
+#testPanel{flex:1;overflow:auto;padding:10px 14px}
+#testPanel .testNote{margin:8px 0 14px;color:var(--muted);font-size:12.5px;line-height:1.5}
+.testSummary{font-weight:600;margin:0 0 12px;padding:8px 10px;border-radius:6px;background:#2b2d31}
+.testSummary.allpass{color:#5fb878}
+.testCase{border:1px solid var(--line);border-radius:6px;padding:10px 12px;margin-bottom:10px}
+.testCase.pass{border-color:#3f7a4f}
+.testCase.fail{border-color:var(--err)}
+.testHead{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:13px}
+.testIcon{font-weight:700}
+.testCase.pass .testIcon{color:#5fb878}
+.testCase.fail .testIcon{color:var(--err)}
+.testInput{margin-left:auto;color:var(--muted);font-size:12px}
+.testRow{display:flex;justify-content:space-between;font-size:13px;padding:2px 0}
+.testRow code{background:#1b1c1e;padding:2px 6px;border-radius:3px}
+.testCase details{margin-top:6px}
+.testCase summary{cursor:pointer;color:var(--muted);font-size:12px}
+.testCase pre{margin:6px 0 0;white-space:pre-wrap;word-break:break-word;font-size:12px}
+#funcsSection{border-top:1px solid var(--line)}
+#funcsBtn{display:block;width:100%;text-align:left;border:0;border-radius:0;background:#2b2d31;color:var(--muted);padding:8px 14px;font-size:13px}
+#funcsBtn:hover{color:var(--text);background:#2b2d31}
+#funcsPanel{padding:6px 14px 10px;max-height:240px;overflow:auto;background:#242629}
+.funcItem{padding:8px 0;border-top:1px solid var(--line)}
+.funcItem:first-child{border-top:0}
+.funcSig{display:block;color:var(--accent);font-size:12.5px;margin-bottom:3px;word-break:break-word}
+.funcItem p{margin:0 0 6px;font-size:12.5px;color:var(--text);line-height:1.45}
+.funcExample{margin:0;font-size:12px;color:var(--muted);background:#1b1c1e;padding:6px 8px;border-radius:4px;overflow-x:auto;white-space:pre}
 #filetabs{display:flex;flex:1;min-width:0;align-items:stretch;overflow-x:auto}
 .tools{display:flex;border-left:1px solid var(--line)}
 .tools button{display:flex;align-items:center;padding:6px 12px}
@@ -102,11 +128,21 @@ main{flex:1;display:grid;grid-template-columns:210px 1fr 1fr;min-height:0}
     <div class="bar" id="viewtabs">
       <button id="vPrev" class="on">Preview</button>
       <button id="vOut">Output</button>
+      <button id="vTests" hidden>Tests</button>
     </div>
     <iframe id="frame" title="Page preview" sandbox="allow-scripts allow-forms"></iframe>
     <pre id="out" hidden></pre>
+    <div id="testPanel" hidden>
+      <button id="runTests">Run tests</button>
+      <p class="testNote">Runs your current code through the real PHP interpreter with each set of inputs below, and compares the "Final amount" it produces against the expected answer.</p>
+      <div id="testResults"></div>
+    </div>
     <div id="stdinbox" hidden><h2>Input (one value per line)</h2><textarea id="stdin" spellcheck="false" aria-label="Program input"></textarea></div>
     <div id="hints"></div>
+    <div id="funcsSection" hidden>
+      <button id="funcsBtn" aria-expanded="false" aria-controls="funcsPanel">PHP function reference</button>
+      <div id="funcsPanel" hidden></div>
+    </div>
   </section>
 </main>
 <div id="veil" hidden>
@@ -133,18 +169,47 @@ const phpReady = import('https://cdn.jsdelivr.net/npm/php-wasm/PhpWeb.mjs').then
 
 /* ------------------------------------------------------------------
    QUESTIONS  (link students to  index.html?q=part1 )
-   files   : the run file is the first .php file (index.php).
-             editable:false makes a file read-only (CSS/JS you provide).
-             Other files are inlined into the preview automatically when
-             the page uses <link href="style.css"> or <script src="script.js">.
-   preview : true  = show rendered page. false = plain text output only.
-   stdin   : text for the Input box (readline()/fgets(STDIN)). Omit to hide the box.
-   hints   : optional array, revealed one at a time.
+   files     : the run file is the first .php file (index.php).
+               editable:false makes a file read-only (CSS/JS you provide).
+               Other files are inlined into the preview automatically when
+               the page uses <link href="style.css"> or <script src="script.js">.
+   preview   : true  = show rendered page. false = plain text output only.
+   stdin     : text for the Input box (readline()/fgets(STDIN)). Omit to hide the box.
+   hints     : optional array, revealed one at a time.
+   tests     : optional array of { label, input: {postFieldName: value, ...}, expectFinal }.
+               Each test POSTs `input` to the student's own current code through the real
+               PHP engine and compares the rendered ".total" row against expectFinal.
+               Adds a "Tests" tab where students can run these themselves. Omit to hide it.
+   functions : optional array of { sig, desc, example } shown in a collapsible
+               "PHP function reference" panel. Omit to hide that panel.
 ------------------------------------------------------------------- */
+
+// The 3 official test cases for the Café Order Calculator (same math in all 3 parts).
+const CAFE_TESTS = [
+  { label: '2 sandwiches, 2 drinks, 1 dessert', input: { sandwiches: '2', drinks: '2', desserts: '1' }, expectFinal: '27.30' },
+  { label: '3 sandwiches, 2 drinks, 1 dessert', input: { sandwiches: '3', drinks: '2', desserts: '1' }, expectFinal: '32.60' },
+  { label: 'Nothing ordered (0, 0, 0)', input: { sandwiches: '0', drinks: '0', desserts: '0' }, expectFinal: '0.00' }
+];
+
+// Built-in PHP functions worth knowing for this question. Real functions, real PHP -
+// the editor runs actual PHP 8.4, so every one of these already works as shown.
+const CAFE_FUNCS_BASE = [
+  { sig: 'number_format(float $num, int $decimals = 0): string', desc: 'Formats a number with grouped thousands and a fixed number of decimal places - use it whenever you display a dollar amount.', example: 'number_format(27.3, 2)\n// "27.30"' },
+  { sig: 'round(float $num, int $precision = 0): float', desc: 'Rounds a number to the given number of decimal places.', example: 'round(4.567, 2)\n// 4.57' },
+  { sig: 'isset(mixed $var): bool', desc: 'Checks whether a variable (or array key) exists and is not null - handy for reading an optional $_POST value safely.', example: "isset($_POST['sandwiches']) ? (int) $_POST['sandwiches'] : 0" }
+];
+const CAFE_FUNCS_ARRAYS = CAFE_FUNCS_BASE.concat([
+  { sig: 'array_sum(array $array): int|float', desc: 'Adds up every value in an array and returns the total. Perfect for turning your $costs array into a subtotal.', example: "array_sum(['sandwich' => 17, 'drink' => 5, 'dessert' => 4])\n// 26" },
+  { sig: 'count(Countable|array $value): int', desc: 'Counts how many elements are in an array.', example: "count(['sandwich', 'drink', 'dessert'])\n// 3" },
+  { sig: 'array_keys(array $array): array', desc: 'Returns a new array containing all the keys of an array.', example: "array_keys(['sandwich' => 8.50, 'drink' => 2.50])\n// ['sandwich', 'drink']" }
+]);
+
 const QUESTIONS = {
   part1: {
     title: 'Part 1 – Variables, Expressions, and Conditionals',
     preview: true,
+    tests: CAFE_TESTS,
+    functions: CAFE_FUNCS_BASE,
     hints: [
       'Sandwich cost = sandwiches × 8.50. Do the same for drinks and desserts, then add all three for the subtotal.',
       'Use if ($subtotal >= 30) { ... } else { ... } to set the 10% discount, or $0 otherwise.',
@@ -240,6 +305,8 @@ button{margin-top:6px;padding:8px 16px;background:#7a3b1d;color:#fff;border:0;bo
   part2: {
     title: 'Part 2 – Refactor Using Functions',
     preview: true,
+    tests: CAFE_TESTS,
+    functions: CAFE_FUNCS_BASE,
     hints: [
       'calculateSubtotal() takes the three item costs as parameters and returns their sum.',
       'calculateDiscount() takes the subtotal and returns 10% of it when the subtotal is 30 or more, otherwise 0.',
@@ -344,6 +411,8 @@ button{margin-top:6px;padding:8px 16px;background:#2d6a4f;color:#fff;border:0;bo
   part3: {
     title: 'Part 3 – Refactor Using Associative Arrays',
     preview: true,
+    tests: CAFE_TESTS,
+    functions: CAFE_FUNCS_ARRAYS,
     hints: [
       'Loop with foreach ($prices as $item => $price) and multiply by $quantities[$item] to fill $costs[$item].',
       'array_sum($costs) adds up every value in the $costs array, giving you the subtotal.',
@@ -677,8 +746,13 @@ function renderTabs() {
   $('run').title = 'Runs ' + mainName + ' (Ctrl+Enter)';
 }
 function view(v) {
-  $('vPrev').className = v === 'prev' ? 'on' : ''; $('vOut').className = v === 'out' ? 'on' : '';
-  $('frame').hidden = v !== 'prev'; $('out').hidden = v !== 'out';
+  $('vPrev').className = v === 'prev' ? 'on' : ''; $('vOut').className = v === 'out' ? 'on' : ''; $('vTests').className = v === 'tests' ? 'on' : '';
+  $('frame').hidden = v !== 'prev'; $('out').hidden = v !== 'out'; $('testPanel').hidden = v !== 'tests';
+}
+function renderFuncs(list) {
+  $('funcsPanel').innerHTML = list.map(f =>
+    '<div class="funcItem"><code class="funcSig">' + esc(f.sig) + '</code><p>' + esc(f.desc) + '</p><pre class="funcExample">' + esc(f.example) + '</pre></div>'
+  ).join('');
 }
 
 function loadQuestion() {
@@ -705,6 +779,15 @@ function loadQuestion() {
   hb.textContent = 'Show hint (0/' + (q.hints?.length || 0) + ')';
   $('out').innerHTML = '<span class="m">Press Run to see your result here.</span>';
   $('frame').srcdoc = '<p style="font:14px system-ui;color:#777;padding:16px">Press Run to see your page here.</p>';
+  const tests = q.tests || [];
+  $('vTests').hidden = !tests.length;
+  $('runTests').textContent = 'Run tests (' + tests.length + ')'; $('runTests').disabled = false;
+  $('testResults').innerHTML = '';
+  const funcs = q.functions || [];
+  $('funcsSection').hidden = !funcs.length;
+  $('funcsPanel').hidden = true; $('funcsBtn').setAttribute('aria-expanded', 'false');
+  $('funcsBtn').textContent = 'PHP function reference (' + funcs.length + ')';
+  renderFuncs(funcs);
   view(q.preview ? 'prev' : 'out');
   req = { m: 'get', d: {} };
 }
@@ -721,7 +804,11 @@ $('redo').onclick = () => { cm.redo(); cm.focus(); };
 cm.on('swapDoc', updHist);
 cm.on('change', () => { updHist(); clearUndo(); if (cur) store('f:' + key + ':' + cur, cm.getValue()); });
 $('stdin').addEventListener('input', e => { clearUndo(); store('stdin:' + key, e.target.value); });
-$('vPrev').onclick = () => view('prev'); $('vOut').onclick = () => view('out');
+$('vPrev').onclick = () => view('prev'); $('vOut').onclick = () => view('out'); $('vTests').onclick = () => view('tests');
+$('funcsBtn').onclick = () => {
+  const opening = $('funcsPanel').hidden;
+  $('funcsPanel').hidden = !opening; $('funcsBtn').setAttribute('aria-expanded', String(opening));
+};
 
 let undoSnap = null, onYes = null, lastFocus = null;
 const clearUndo = () => { undoSnap = null; $('undoReset').hidden = true; };
@@ -850,10 +937,15 @@ async function getPhp() {
   return php;
 }
 
+// The Run button and the Tests panel (tests.js) share the one PHP engine instance above,
+// so only one of them may drive it at a time. This flag - and disabling both buttons -
+// keeps a Run click and a Run Tests click from interleaving and corrupting each other's output.
+let engineBusy = false;
+
 async function run() {
-  const btn = $('run'), q = QUESTIONS[key];
-  if (btn.disabled) return;
-  btn.disabled = true; btn.textContent = 'Running…';
+  const btn = $('run'), tbtn = $('runTests'), q = QUESTIONS[key];
+  if (engineBusy) return;
+  engineBusy = true; btn.disabled = true; btn.textContent = 'Running…'; tbtn.disabled = true;
   sinkText = ''; sinkErrs = '';
   try {
     const main = mainName;
@@ -875,7 +967,7 @@ async function run() {
     $('frame').srcdoc = inline(text) + BRIDGE;
     view(flagged ? 'out' : 'prev');
   }
-  btn.disabled = false; btn.textContent = 'Run (Ctrl+Enter)';
+  engineBusy = false; btn.disabled = false; btn.textContent = 'Run (Ctrl+Enter)'; tbtn.disabled = !QUESTIONS[key].tests?.length;
 }
 function runFresh() { req = { m: 'get', d: {} }; run(); }
 
@@ -885,6 +977,62 @@ window.addEventListener('message', e => {
 });
 $('run').onclick = runFresh;
 loadQuestion();
+
+// Runs the current question's `tests` (see questions.js) against the student's own
+// code through the SAME reused PHP engine instance as Run (see getPhp() / engineBusy
+// in php-runner.js) - never a second WebAssembly instance - and shows each one as a
+// pass/fail card with the expected vs. actual "Final amount" and, on failure, the raw
+// text the PHP interpreter produced (so students can see parse errors, warnings, etc.
+// exactly as the interpreter reported them).
+
+async function runOneTest(t) {
+  const main = mainName;
+  await phpReady;
+  if (!PhpWeb) return { ok: false, actual: null, diag: 'The PHP engine could not be loaded.' };
+  try {
+    const engine = await getPhp();
+    for (const d of allFolders()) { try { await engine.mkdir('/' + d); } catch (e) {} }
+    for (const n of allNames()) await engine.writeFile('/' + n, n.endsWith('.php') ? fix(docs[n].getValue()) : docs[n].getValue());
+    sinkText = ''; sinkErrs = '';
+    await engine.run(wrap(docs[main].getValue(), '', { m: 'post', d: t.input }));
+  } catch (err) {
+    sinkErrs += String(err && err.message || err);
+    php = null; // rebuild the engine next time - something went wrong at the JS level
+  }
+  const text = sinkText, errs = sinkErrs;
+  const flagged = !!errs || PHP_DIAG.test(text);
+  if (flagged) return { ok: false, actual: null, diag: text + (errs ? '\n' + errs : '') };
+  const m = /class="total"[\s\S]*?\$([\d,]+\.\d{2})/.exec(text);
+  return m
+    ? { ok: m[1] === t.expectFinal, actual: m[1], diag: '' }
+    : { ok: false, actual: null, diag: 'Could not find a "Final amount" row in your page. Make sure the receipt table (with class="total" on that row) is still in index.php.' };
+}
+
+function renderTestResults(rows) {
+  const passed = rows.filter(x => x.r.ok).length;
+  $('testResults').innerHTML =
+    '<p class="testSummary' + (passed === rows.length ? ' allpass' : '') + '">' + passed + ' / ' + rows.length + ' tests passing</p>' +
+    rows.map(({ t, r }, i) => '<div class="testCase ' + (r.ok ? 'pass' : 'fail') + '">' +
+      '<div class="testHead"><span class="testIcon" aria-hidden="true">' + (r.ok ? '✓' : '✗') + '</span>' +
+      '<strong>Test ' + (i + 1) + '</strong><span class="testInput">' + esc(t.label) + '</span></div>' +
+      '<div class="testRow"><span>Expected final amount</span><code>$' + esc(t.expectFinal) + '</code></div>' +
+      '<div class="testRow"><span>Your final amount</span><code>' + (r.actual !== null ? '$' + esc(r.actual) : '(none)') + '</code></div>' +
+      (r.diag ? '<details><summary>See what the PHP interpreter produced</summary><pre class="e">' + esc(r.diag) + '</pre></details>' : '') +
+      '</div>'
+    ).join('');
+}
+
+async function runTests() {
+  const q = QUESTIONS[key], runBtn = $('run'), testBtn = $('runTests');
+  if (engineBusy || !q.tests?.length) return;
+  engineBusy = true; runBtn.disabled = true; testBtn.disabled = true; testBtn.textContent = 'Running tests…';
+  $('testResults').innerHTML = '<p class="m">Running ' + q.tests.length + ' test(s) against your code…</p>';
+  const rows = [];
+  for (const t of q.tests) rows.push({ t, r: await runOneTest(t) });
+  renderTestResults(rows);
+  engineBusy = false; runBtn.disabled = false; testBtn.disabled = false; testBtn.textContent = 'Run tests (' + q.tests.length + ')';
+}
+$('runTests').onclick = runTests;
 
 </script>
 </body>

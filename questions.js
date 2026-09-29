@@ -1,17 +1,46 @@
 /* ------------------------------------------------------------------
    QUESTIONS  (link students to  index.html?q=part1 )
-   files   : the run file is the first .php file (index.php).
-             editable:false makes a file read-only (CSS/JS you provide).
-             Other files are inlined into the preview automatically when
-             the page uses <link href="style.css"> or <script src="script.js">.
-   preview : true  = show rendered page. false = plain text output only.
-   stdin   : text for the Input box (readline()/fgets(STDIN)). Omit to hide the box.
-   hints   : optional array, revealed one at a time.
+   files     : the run file is the first .php file (index.php).
+               editable:false makes a file read-only (CSS/JS you provide).
+               Other files are inlined into the preview automatically when
+               the page uses <link href="style.css"> or <script src="script.js">.
+   preview   : true  = show rendered page. false = plain text output only.
+   stdin     : text for the Input box (readline()/fgets(STDIN)). Omit to hide the box.
+   hints     : optional array, revealed one at a time.
+   tests     : optional array of { label, input: {postFieldName: value, ...}, expectFinal }.
+               Each test POSTs `input` to the student's own current code through the real
+               PHP engine and compares the rendered ".total" row against expectFinal.
+               Adds a "Tests" tab where students can run these themselves. Omit to hide it.
+   functions : optional array of { sig, desc, example } shown in a collapsible
+               "PHP function reference" panel. Omit to hide that panel.
 ------------------------------------------------------------------- */
+
+// The 3 official test cases for the Café Order Calculator (same math in all 3 parts).
+const CAFE_TESTS = [
+  { label: '2 sandwiches, 2 drinks, 1 dessert', input: { sandwiches: '2', drinks: '2', desserts: '1' }, expectFinal: '27.30' },
+  { label: '3 sandwiches, 2 drinks, 1 dessert', input: { sandwiches: '3', drinks: '2', desserts: '1' }, expectFinal: '32.60' },
+  { label: 'Nothing ordered (0, 0, 0)', input: { sandwiches: '0', drinks: '0', desserts: '0' }, expectFinal: '0.00' }
+];
+
+// Built-in PHP functions worth knowing for this question. Real functions, real PHP -
+// the editor runs actual PHP 8.4, so every one of these already works as shown.
+const CAFE_FUNCS_BASE = [
+  { sig: 'number_format(float $num, int $decimals = 0): string', desc: 'Formats a number with grouped thousands and a fixed number of decimal places - use it whenever you display a dollar amount.', example: 'number_format(27.3, 2)\n// "27.30"' },
+  { sig: 'round(float $num, int $precision = 0): float', desc: 'Rounds a number to the given number of decimal places.', example: 'round(4.567, 2)\n// 4.57' },
+  { sig: 'isset(mixed $var): bool', desc: 'Checks whether a variable (or array key) exists and is not null - handy for reading an optional $_POST value safely.', example: "isset($_POST['sandwiches']) ? (int) $_POST['sandwiches'] : 0" }
+];
+const CAFE_FUNCS_ARRAYS = CAFE_FUNCS_BASE.concat([
+  { sig: 'array_sum(array $array): int|float', desc: 'Adds up every value in an array and returns the total. Perfect for turning your $costs array into a subtotal.', example: "array_sum(['sandwich' => 17, 'drink' => 5, 'dessert' => 4])\n// 26" },
+  { sig: 'count(Countable|array $value): int', desc: 'Counts how many elements are in an array.', example: "count(['sandwich', 'drink', 'dessert'])\n// 3" },
+  { sig: 'array_keys(array $array): array', desc: 'Returns a new array containing all the keys of an array.', example: "array_keys(['sandwich' => 8.50, 'drink' => 2.50])\n// ['sandwich', 'drink']" }
+]);
+
 const QUESTIONS = {
   part1: {
     title: 'Part 1 – Variables, Expressions, and Conditionals',
     preview: true,
+    tests: CAFE_TESTS,
+    functions: CAFE_FUNCS_BASE,
     hints: [
       'Sandwich cost = sandwiches × 8.50. Do the same for drinks and desserts, then add all three for the subtotal.',
       'Use if ($subtotal >= 30) { ... } else { ... } to set the 10% discount, or $0 otherwise.',
@@ -107,6 +136,8 @@ button{margin-top:6px;padding:8px 16px;background:#7a3b1d;color:#fff;border:0;bo
   part2: {
     title: 'Part 2 – Refactor Using Functions',
     preview: true,
+    tests: CAFE_TESTS,
+    functions: CAFE_FUNCS_BASE,
     hints: [
       'calculateSubtotal() takes the three item costs as parameters and returns their sum.',
       'calculateDiscount() takes the subtotal and returns 10% of it when the subtotal is 30 or more, otherwise 0.',
@@ -211,6 +242,8 @@ button{margin-top:6px;padding:8px 16px;background:#2d6a4f;color:#fff;border:0;bo
   part3: {
     title: 'Part 3 – Refactor Using Associative Arrays',
     preview: true,
+    tests: CAFE_TESTS,
+    functions: CAFE_FUNCS_ARRAYS,
     hints: [
       'Loop with foreach ($prices as $item => $price) and multiply by $quantities[$item] to fill $costs[$item].',
       'array_sum($costs) adds up every value in the $costs array, giving you the subtotal.',

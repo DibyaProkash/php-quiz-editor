@@ -55,10 +55,15 @@ async function getPhp() {
   return php;
 }
 
+// The Run button and the Tests panel (tests.js) share the one PHP engine instance above,
+// so only one of them may drive it at a time. This flag - and disabling both buttons -
+// keeps a Run click and a Run Tests click from interleaving and corrupting each other's output.
+let engineBusy = false;
+
 async function run() {
-  const btn = $('run'), q = QUESTIONS[key];
-  if (btn.disabled) return;
-  btn.disabled = true; btn.textContent = 'Running…';
+  const btn = $('run'), tbtn = $('runTests'), q = QUESTIONS[key];
+  if (engineBusy) return;
+  engineBusy = true; btn.disabled = true; btn.textContent = 'Running…'; tbtn.disabled = true;
   sinkText = ''; sinkErrs = '';
   try {
     const main = mainName;
@@ -80,7 +85,7 @@ async function run() {
     $('frame').srcdoc = inline(text) + BRIDGE;
     view(flagged ? 'out' : 'prev');
   }
-  btn.disabled = false; btn.textContent = 'Run (Ctrl+Enter)';
+  engineBusy = false; btn.disabled = false; btn.textContent = 'Run (Ctrl+Enter)'; tbtn.disabled = !QUESTIONS[key].tests?.length;
 }
 function runFresh() { req = { m: 'get', d: {} }; run(); }
 

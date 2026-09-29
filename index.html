@@ -28,11 +28,21 @@
     <div class="bar" id="viewtabs">
       <button id="vPrev" class="on">Preview</button>
       <button id="vOut">Output</button>
+      <button id="vTests" hidden>Tests</button>
     </div>
     <iframe id="frame" title="Page preview" sandbox="allow-scripts allow-forms"></iframe>
     <pre id="out" hidden></pre>
+    <div id="testPanel" hidden>
+      <button id="runTests">Run tests</button>
+      <p class="testNote">Runs your current code through the real PHP interpreter with each set of inputs below, and compares the "Final amount" it produces against the expected answer.</p>
+      <div id="testResults"></div>
+    </div>
     <div id="stdinbox" hidden><h2>Input (one value per line)</h2><textarea id="stdin" spellcheck="false" aria-label="Program input"></textarea></div>
     <div id="hints"></div>
+    <div id="funcsSection" hidden>
+      <button id="funcsBtn" aria-expanded="false" aria-controls="funcsPanel">PHP function reference</button>
+      <div id="funcsPanel" hidden></div>
+    </div>
   </section>
 </main>
 <div id="veil" hidden>
@@ -59,5 +69,6 @@
 <script src="filesystem.js"></script>
 <script src="editor-ui.js"></script>
 <script src="php-runner.js"></script>
+<script src="tests.js"></script>
 </body>
 </html>
