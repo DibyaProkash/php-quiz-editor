@@ -825,6 +825,11 @@ function inline(html) {
   return html;
 }
 
+// php-wasm reports PHP-level parse errors, fatal errors, warnings and notices
+// through the 'output' event, not 'error' - so they show up mixed into normal
+// output text rather than on a separate channel. Detect them there instead.
+const PHP_DIAG = /(?:^|\n)\s*(?:Parse error|Fatal error|Warning|Notice|Deprecated):/;
+
 async function run() {
   const btn = $('run'), q = QUESTIONS[key];
   if (btn.disabled) return;
@@ -841,11 +846,12 @@ async function run() {
     for (const n of allNames()) await php.writeFile('/' + n, n.endsWith('.php') ? fix(docs[n].getValue()) : docs[n].getValue());
     await php.run(wrap(docs[main].getValue(), $('stdin').value, req));
   } catch (err) { errs += String(err && err.message || err); }
-  $('out').innerHTML = esc(text) + (errs ? '<span class="e">' + (text ? '\n' : '') + esc(errs) + '</span>' : '') ||
+  const flagged = !!errs || PHP_DIAG.test(text);
+  $('out').innerHTML = (flagged ? '<span class="e">' + esc(text) + (errs ? '\n' + esc(errs) : '') + '</span>' : esc(text)) ||
     '<span class="m">(no output)</span>';
   if (q.preview) {
     $('frame').srcdoc = inline(text) + BRIDGE;
-    view(errs ? 'out' : 'prev');
+    view(flagged ? 'out' : 'prev');
   }
   btn.disabled = false; btn.textContent = 'Run (Ctrl+Enter)';
 }
