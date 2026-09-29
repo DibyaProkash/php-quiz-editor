@@ -4,20 +4,106 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PHP Editor</title>
+<!-- Applies the saved theme (or the OS's) before first paint, so the page never
+     flashes the wrong colors for a moment while the rest of the scripts load. -->
+<script>(function(){
+  try {
+    var pref = sessionStorage.getItem('themePref') || 'system';
+    var eff = pref === 'system' ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : pref;
+    document.documentElement.dataset.theme = eff;
+    document.documentElement.dataset.themePref = pref;
+    var zoomPct = parseInt(sessionStorage.getItem('zoomPct'), 10);
+    if (zoomPct >= 60 && zoomPct <= 200) document.documentElement.style.setProperty('--ui-scale', String(zoomPct / 100));
+  } catch (e) {}
+})();</script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/show-hint.min.css">
 <style>
-:root{--bg:#1e1f22;--panel:#252629;--line:#3a3c40;--text:#d4d4d4;--muted:#8b8f96;--accent:#4f8cff;--err:#f0716b}
+/* ------------------------------------------------------------------------
+   Theming: every color used anywhere below is one of these custom
+   properties, so a theme only has to redefine this one block. "System"
+   isn't its own palette - it just resolves to Dark or Light based on the
+   OS setting (see theme.js) and sets [data-theme] to one of these anyway.
+------------------------------------------------------------------------- */
+:root, :root[data-theme="dark"]{
+  --bg:#1e1f22; --panel:#252629; --panel2:#242629; --sunken:#1b1c1e; --line:#3a3c40;
+  --text:#d4d4d4; --muted:#8b8f96; --accent:#4f8cff; --accent-contrast:#fff;
+  --err:#f0716b; --ok:#5fb878; --err-rgb:240,113,107; --ok-rgb:95,184,120;
+  --input-bg:#333539; --hover-bg:#3d4046; --file-hover-bg:#2f3136; --file-sel-bg:#33415c;
+  --dir-sel-bg:#2b3040; --shadow:0 8px 24px rgba(0,0,0,.45); --veil:rgba(0,0,0,.6);
+  color-scheme: dark;
+}
+:root[data-theme="light"]{
+  --bg:#ffffff; --panel:#f3f3f5; --panel2:#eceef1; --sunken:#e7e9ec; --line:#d7d9dd;
+  --text:#1e1f22; --muted:#5b5f68; --accent:#2f6fed; --accent-contrast:#fff;
+  --err:#c62828; --ok:#1e7d3c; --err-rgb:198,40,40; --ok-rgb:30,125,60;
+  --input-bg:#ffffff; --hover-bg:#e4e6ea; --file-hover-bg:#eef1f5; --file-sel-bg:#d9e6fb;
+  --dir-sel-bg:#e6ecf8; --shadow:0 8px 20px rgba(0,0,0,.12); --veil:rgba(0,0,0,.35);
+  color-scheme: light;
+}
+:root[data-theme="high-contrast"]{
+  --bg:#000000; --panel:#000000; --panel2:#0a0a0a; --sunken:#111111; --line:#ffffff;
+  --text:#ffffff; --muted:#e0e0e0; --accent:#ffdd00; --accent-contrast:#000;
+  --err:#ff6b6b; --ok:#5fff8f; --err-rgb:255,107,107; --ok-rgb:95,255,143;
+  --input-bg:#000000; --hover-bg:#222222; --file-hover-bg:#1a1a1a; --file-sel-bg:#3a3a00;
+  --dir-sel-bg:#2a2a00; --shadow:0 0 0 1px #fff; --veil:rgba(0,0,0,.8);
+  color-scheme: dark;
+}
+:root[data-theme="solarized"]{
+  --bg:#002b36; --panel:#073642; --panel2:#0a3b46; --sunken:#04222b; --line:#0f4956;
+  --text:#93a1a1; --muted:#6f8a90; --accent:#268bd2; --accent-contrast:#fff;
+  --err:#dc322f; --ok:#859900; --err-rgb:220,50,47; --ok-rgb:133,153,0;
+  --input-bg:#073642; --hover-bg:#0a3b46; --file-hover-bg:#0a3b46; --file-sel-bg:#0f4956;
+  --dir-sel-bg:#0a3b46; --shadow:0 8px 24px rgba(0,0,0,.5); --veil:rgba(0,0,0,.6);
+  color-scheme: dark;
+}
+:root{ --ui-scale:1; }
+
 *{box-sizing:border-box}
 html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font:14px system-ui,-apple-system,"Segoe UI",sans-serif}
-body{display:flex;flex-direction:column}
+body{display:flex;flex-direction:column;zoom:var(--ui-scale)}
+
+/* Skip link: invisible until focused, then jumps a keyboard user straight to the
+   code editor without tabbing through the whole file explorer every time. */
+.skipLink{position:absolute;left:-9999px;top:0;z-index:100;background:var(--accent);color:var(--accent-contrast);padding:10px 16px;border-radius:0 0 6px 0;font-weight:600;text-decoration:none}
+.skipLink:focus{left:0}
+
 header{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--panel);border-bottom:1px solid var(--line)}
 header h1{font-size:14px;font-weight:600;margin:0 auto 0 0}
-select,button{font:inherit;color:var(--text);background:#333539;border:1px solid var(--line);border-radius:4px;padding:6px 12px;cursor:pointer}
-button:hover:not(:disabled){background:#3d4046}
-button:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
-#run{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+
+/* Bottom status bar - VS Code style: a slim accent-colored strip docked to the
+   bottom of the window holding secondary, infrequently-changed controls (reset,
+   hints, text size, theme) so the main header stays focused on Run. */
+#statusbar{display:flex;align-items:stretch;justify-content:space-between;background:var(--accent);color:var(--accent-contrast);font-size:12.5px;min-height:26px;flex:none}
+.sbCluster{display:flex;align-items:stretch}
+.sbGroup{display:flex;align-items:stretch}
+.sbDivider{align-self:center;width:1px;height:16px;margin:0 4px;background:rgba(255,255,255,.3)}
+:root[data-theme="light"] .sbDivider,:root[data-theme="high-contrast"] .sbDivider{background:rgba(0,0,0,.25)}
+.sbBtn{border:0;border-radius:0;background:transparent;color:var(--accent-contrast);padding:3px 10px;font-size:12.5px}
+.sbBtn:hover:not(:disabled){background:rgba(0,0,0,.15)}
+:root[data-theme="light"] .sbBtn:hover:not(:disabled),:root[data-theme="high-contrast"] .sbBtn:hover:not(:disabled){background:rgba(255,255,255,.2)}
+.sbLabel{display:flex;align-items:center;gap:6px;padding:0 10px;font-size:12.5px;color:var(--accent-contrast);white-space:nowrap}
+.sbLabel select{background:transparent;color:var(--accent-contrast);border:0;border-radius:0;padding:3px 4px;font-size:12.5px}
+.sbLabel select:hover{background:rgba(0,0,0,.15)}
+:root[data-theme="light"] .sbLabel select:hover,:root[data-theme="high-contrast"] .sbLabel select:hover{background:rgba(255,255,255,.2)}
+/* The <select> itself sits on the blue status bar, so its closed-state text is white -
+   but its dropdown OPTIONS pop up on the browser's own (usually light) native menu
+   background, and would otherwise inherit that same white text, making them unreadable.
+   Options get their own explicit, normal light-on-dark-text styling regardless. */
+.sbLabel select option{color:var(--text);background:var(--panel)}
+.sbZoom{display:flex;align-items:center;gap:2px;padding:0 6px;border-right:1px solid rgba(255,255,255,.25)}
+:root[data-theme="light"] .sbZoom,:root[data-theme="high-contrast"] .sbZoom{border-right-color:rgba(0,0,0,.2)}
+.sbZoomIcon{color:var(--accent-contrast);opacity:.85;margin-right:2px}
+.sbZoomBtn{font-size:15px;line-height:1;font-weight:600;padding:3px 9px}
+#zoomLevel{min-width:44px;text-align:center;font-variant-numeric:tabular-nums}
+.sbZoomBtn:disabled{opacity:.4;cursor:default}
+#statusbar button:focus-visible,#statusbar select:focus-visible{outline:2px solid var(--accent-contrast);outline-offset:-2px}
+select,button{font:inherit;color:var(--text);background:var(--input-bg);border:1px solid var(--line);border-radius:4px;padding:6px 12px;cursor:pointer}
+button:hover:not(:disabled){background:var(--hover-bg)}
+button:focus-visible,select:focus-visible,textarea:focus-visible,[tabindex]:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+:root[data-theme="high-contrast"] button:focus-visible,:root[data-theme="high-contrast"] select:focus-visible,:root[data-theme="high-contrast"] textarea:focus-visible,:root[data-theme="high-contrast"] [tabindex]:focus-visible,:root[data-theme="high-contrast"] a:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+#run{background:var(--accent);border-color:var(--accent);color:var(--accent-contrast);font-weight:600}
 #run:disabled{opacity:.6;cursor:wait}
 main{flex:1;display:grid;grid-template-columns:210px 1fr 1fr;min-height:0}
 .editor,.side{min-width:0;min-height:0;display:flex;flex-direction:column}
@@ -33,7 +119,6 @@ main{flex:1;display:grid;grid-template-columns:210px 1fr 1fr;min-height:0}
 #stdinbox{border-top:1px solid var(--line)}
 #stdinbox h2{margin:0;padding:6px 14px;font-size:13px;font-weight:500;color:var(--muted);background:var(--panel)}
 #stdin{display:block;height:90px;resize:vertical;width:100%;background:var(--bg);color:var(--text);border:0;padding:10px 14px;font:14px ui-monospace,Menlo,Consolas,monospace}
-#hints{display:none;padding:10px 14px;background:#2b2d31;border-top:1px solid var(--line);max-height:30%;overflow:auto}
 #hints p{margin:0 0 8px}
 #testPanel{flex:1;overflow:auto;padding:12px 14px}
 #testPanel .testNote{margin:8px 0 14px;color:var(--muted);font-size:12.5px;line-height:1.5}
@@ -41,76 +126,101 @@ main{flex:1;display:grid;grid-template-columns:210px 1fr 1fr;min-height:0}
 .testRunning{display:flex;align-items:center;gap:9px;color:var(--muted);font-size:13px;margin:0 0 4px}
 .spin{animation:cmspin 1s linear infinite;transform-origin:50% 50%}
 @keyframes cmspin{to{transform:rotate(360deg)}}
-.testSummary{display:flex;align-items:center;gap:12px;margin:0 0 16px;padding:10px 14px;border-radius:8px;background:linear-gradient(180deg,#26282c,#222327);border:1px solid var(--line);box-shadow:0 0 0 1px rgba(95,184,120,.08),0 4px 16px rgba(0,0,0,.3)}
-.testSummary .testSummaryIcon{display:flex;color:#5fb878;filter:drop-shadow(0 0 6px rgba(95,184,120,.7))}
-.testSummary.somefail .testSummaryIcon{color:var(--err);filter:drop-shadow(0 0 6px rgba(240,113,107,.7))}
+.testSummary{display:flex;align-items:center;gap:12px;margin:0 0 16px;padding:10px 14px;border-radius:8px;background:linear-gradient(180deg,var(--panel2),var(--sunken));border:1px solid var(--line);box-shadow:0 0 0 1px rgba(var(--ok-rgb),.08),0 4px 16px rgba(0,0,0,.3)}
+.testSummary .testSummaryIcon{display:flex;color:var(--ok);filter:drop-shadow(0 0 6px rgba(var(--ok-rgb),.7))}
+.testSummary.somefail .testSummaryIcon{color:var(--err);filter:drop-shadow(0 0 6px rgba(var(--err-rgb),.7))}
 .testSummaryText{font-weight:600;font-size:13px;white-space:nowrap;letter-spacing:.2px}
 .testBar{flex:1;height:6px;border-radius:999px;background:var(--line);overflow:hidden}
-.testSummary.somefail .testBar{background:rgba(240,113,107,.2)}
-.testBarFill{height:100%;border-radius:999px;background:linear-gradient(90deg,#3ddc97,#5fb878);box-shadow:0 0 10px rgba(95,184,120,.65);transition:width .5s cubic-bezier(.4,0,.2,1)}
-.testSummary.somefail .testBarFill{background:linear-gradient(90deg,#ff9d97,#f0716b);box-shadow:0 0 10px rgba(240,113,107,.65)}
-.testCase{opacity:0;transform:translateY(4px);animation:testIn .3s ease forwards;border:1px solid var(--line);border-left:3px solid var(--muted);border-radius:8px;padding:10px 12px;margin-bottom:10px;background:#212226;transition:box-shadow .2s ease,border-color .2s ease}
+.testSummary.somefail .testBar{background:rgba(var(--err-rgb),.2)}
+.testBarFill{height:100%;border-radius:999px;background:linear-gradient(90deg,var(--ok),var(--ok));box-shadow:0 0 10px rgba(var(--ok-rgb),.65);transition:width .5s cubic-bezier(.4,0,.2,1)}
+.testSummary.somefail .testBarFill{background:linear-gradient(90deg,var(--err),var(--err));box-shadow:0 0 10px rgba(var(--err-rgb),.65)}
+.testCase{opacity:0;transform:translateY(4px);animation:testIn .3s ease forwards;border:1px solid var(--line);border-left:3px solid var(--muted);border-radius:8px;padding:10px 12px;margin-bottom:10px;background:var(--panel2);transition:box-shadow .2s ease,border-color .2s ease}
 @keyframes testIn{to{opacity:1;transform:translateY(0)}}
-.testCase.pass{border-left-color:#5fb878}
+.testCase.pass{border-left-color:var(--ok)}
 .testCase.fail{border-left-color:var(--err)}
-.testCase.pass:hover{box-shadow:0 0 0 1px rgba(95,184,120,.35),0 4px 16px rgba(0,0,0,.35)}
-.testCase.fail:hover{box-shadow:0 0 0 1px rgba(240,113,107,.35),0 4px 16px rgba(0,0,0,.35)}
+.testCase.pass:hover{box-shadow:0 0 0 1px rgba(var(--ok-rgb),.35),0 4px 16px rgba(0,0,0,.35)}
+.testCase.fail:hover{box-shadow:0 0 0 1px rgba(var(--err-rgb),.35),0 4px 16px rgba(0,0,0,.35)}
 .testHead{display:flex;align-items:center;gap:9px;margin-bottom:8px;font-size:13px}
 .testIcon{display:flex;flex:none}
-.testCase.pass .testIcon{color:#5fb878}
+.testCase.pass .testIcon{color:var(--ok)}
 .testCase.fail .testIcon{color:var(--err)}
 .testInput{margin-left:auto;color:var(--muted);font-size:11.5px;font-family:ui-monospace,Menlo,Consolas,monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .testRow{display:flex;justify-content:space-between;align-items:center;font-size:12.5px;padding:3px 0}
-.testRow code{background:#1b1c1e;padding:2px 8px;border-radius:999px;font:12px ui-monospace,Menlo,Consolas,monospace}
-.testCase.pass .testRow code.actual{color:#5fb878}
+.testRow code{background:var(--sunken);padding:2px 8px;border-radius:999px;font:12px ui-monospace,Menlo,Consolas,monospace}
+.testCase.pass .testRow code.actual{color:var(--ok)}
 .testCase.fail .testRow code.actual{color:var(--err)}
 .testCase details{margin-top:8px}
 .testCase summary{cursor:pointer;color:var(--muted);font-size:11.5px}
 .testCase summary:hover{color:var(--text)}
-.testCase pre{margin:6px 0 0;white-space:pre-wrap;word-break:break-word;font-size:11.5px;background:#1b1c1e;padding:8px 10px;border-radius:6px}
-#funcsSection{border-top:1px solid var(--line)}
-#funcsBtn{display:block;width:100%;text-align:left;border:0;border-radius:0;background:#2b2d31;color:var(--muted);padding:8px 14px;font-size:13px}
-#funcsBtn:hover{color:var(--text);background:#2b2d31}
-#funcsPanel{padding:6px 14px 10px;max-height:240px;overflow:auto;background:#242629}
+.testCase pre{margin:6px 0 0;white-space:pre-wrap;word-break:break-word;font-size:11.5px;background:var(--sunken);padding:8px 10px;border-radius:6px}
+.accordionSection{border-top:1px solid var(--line)}
+.accordionBtn{display:flex;align-items:center;gap:8px;width:100%;text-align:left;border:0;border-radius:0;background:var(--panel2);color:var(--muted);padding:8px 14px;font-size:13px}
+.accordionBtn:hover{color:var(--text);background:var(--panel2)}
+.accordionBtn .chev{flex:none;transition:transform .15s ease}
+.accordionBtn[aria-expanded="true"] .chev{transform:rotate(-180deg)}
+.accordionPanel{padding:6px 14px 10px;max-height:240px;overflow:auto;background:var(--panel2)}
+#hints.accordionPanel{max-height:30%}
 .funcItem{padding:8px 0;border-top:1px solid var(--line)}
 .funcItem:first-child{border-top:0}
 .funcSig{display:block;color:var(--accent);font-size:12.5px;margin-bottom:3px;word-break:break-word}
 .funcItem p{margin:0 0 6px;font-size:12.5px;color:var(--text);line-height:1.45}
-.funcExample{margin:0;font-size:12px;color:var(--muted);background:#1b1c1e;padding:6px 8px;border-radius:4px;overflow-x:auto;white-space:pre}
+.funcExample{margin:0;font-size:12px;color:var(--muted);background:var(--sunken);padding:6px 8px;border-radius:4px;overflow-x:auto;white-space:pre}
 #filetabs{display:flex;flex:1;min-width:0;align-items:stretch;overflow-x:auto}
 .tools{display:flex;border-left:1px solid var(--line)}
 .tools button{display:flex;align-items:center;padding:6px 12px}
 .tools button:disabled{opacity:.35;cursor:default}
-#formatMsg{padding:6px 14px;font-size:12.5px;border-bottom:1px solid var(--line);background:#22262b}
-#formatMsg.ok{color:#5fb878;background:#1c2620}
-#formatMsg.e{color:var(--err);background:#2a1e1e}
+#formatMsg{padding:6px 14px;font-size:12.5px;border-bottom:1px solid var(--line);background:var(--panel2)}
+#formatMsg.ok{color:var(--ok);background:rgba(var(--ok-rgb),.12)}
+#formatMsg.e{color:var(--err);background:rgba(var(--err-rgb),.12)}
+
+/* README / Markdown preview ("md code runner") */
+#mdBar{display:flex;align-items:center;gap:10px;padding:6px 14px;border-bottom:1px solid var(--line);background:var(--panel2)}
+#mdBar .mdNote{color:var(--muted);font-size:12px}
+#mdPreview{flex:1;overflow:auto;padding:20px 26px;background:var(--bg);line-height:1.6}
+#mdPreview.markdown-body h1,#mdPreview.markdown-body h2,#mdPreview.markdown-body h3{margin:1.2em 0 .5em;line-height:1.3}
+#mdPreview.markdown-body h1{font-size:22px;border-bottom:1px solid var(--line);padding-bottom:.3em}
+#mdPreview.markdown-body h2{font-size:18px;border-bottom:1px solid var(--line);padding-bottom:.25em}
+#mdPreview.markdown-body h3{font-size:15px}
+#mdPreview.markdown-body p,#mdPreview.markdown-body ul,#mdPreview.markdown-body ol{margin:.6em 0}
+#mdPreview.markdown-body ul,#mdPreview.markdown-body ol{padding-left:1.6em}
+#mdPreview.markdown-body li{margin:.25em 0}
+#mdPreview.markdown-body code{background:var(--sunken);padding:2px 5px;border-radius:4px;font:13px ui-monospace,Menlo,Consolas,monospace}
+#mdPreview.markdown-body pre{background:var(--sunken);padding:12px 14px;border-radius:6px;overflow-x:auto}
+#mdPreview.markdown-body pre code{background:none;padding:0}
+#mdPreview.markdown-body table{border-collapse:collapse;margin:.8em 0;width:100%}
+#mdPreview.markdown-body th,#mdPreview.markdown-body td{border:1px solid var(--line);padding:6px 10px;text-align:left}
+#mdPreview.markdown-body th{background:var(--panel2)}
+#mdPreview.markdown-body a{color:var(--accent)}
+#mdPreview.markdown-body blockquote{margin:.8em 0;padding:2px 14px;border-left:3px solid var(--line);color:var(--muted)}
+#mdPreview .mdLoading{color:var(--muted)}
+#mdPreview .mdFallback{white-space:pre-wrap;font:13px ui-monospace,Menlo,Consolas,monospace;margin:0}
 
 /* Autocomplete ("intellisense") popup - dark theme to match the editor, plus
    category coloring: keywords, built-in functions, and $variables each get their own tint. */
-.CodeMirror-hints{background:#26282c;border:1px solid var(--line);border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.45);font:13px ui-monospace,Menlo,Consolas,monospace;padding:4px 0;max-width:420px}
+.CodeMirror-hints{background:var(--panel2);border:1px solid var(--line);border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.45);font:13px ui-monospace,Menlo,Consolas,monospace;padding:4px 0;max-width:420px}
 .CodeMirror-hint{color:var(--text);padding:4px 12px}
-li.CodeMirror-hint-active{background:var(--accent);color:#fff}
+li.CodeMirror-hint-active{background:var(--accent);color:var(--accent-contrast)}
 .cm-hint-kw{color:#c586c0}
 .cm-hint-fn{color:#dcdcaa}
 .cm-hint-var{color:#4fc1ff}
-li.CodeMirror-hint-active.cm-hint-kw,li.CodeMirror-hint-active.cm-hint-fn,li.CodeMirror-hint-active.cm-hint-var{color:#fff}
+li.CodeMirror-hint-active.cm-hint-kw,li.CodeMirror-hint-active.cm-hint-fn,li.CodeMirror-hint-active.cm-hint-var{color:var(--accent-contrast)}
 .cm-hint-row{display:flex;align-items:baseline;gap:10px;white-space:nowrap}
 .cm-hint-name{flex:0 0 auto;font-weight:600}
 .cm-hint-doc{flex:1 1 auto;color:var(--muted);font:11px ui-sans-serif,system-ui,sans-serif;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-li.CodeMirror-hint-active .cm-hint-doc{color:#e8e8e8}
+li.CodeMirror-hint-active .cm-hint-doc{color:var(--accent-contrast)}
 
 .explorer{background:var(--panel);border-right:1px solid var(--line);overflow:auto;min-width:0}
 .explorer h2{margin:0;padding:8px 14px;font-size:12px;font-weight:600;color:var(--muted)}
 .explorer .list{display:flex;flex-direction:column}
 .etools{display:flex}
-.frow.sel>.fitem:not(.on){background:#2b3040}
+.frow.sel>.fitem:not(.on){background:var(--dir-sel-bg)}
 .acts{display:flex;opacity:0}
 .frow:hover .acts,.frow:focus-within .acts,.frow.cur .acts{opacity:1}
 @media(hover:none){.acts{opacity:.8}}
 .acts button{display:flex;border:0;border-radius:0;background:transparent;color:var(--muted);padding:4px 5px}
 .acts button:hover,.acts button:focus-visible{color:var(--text)}
 .acts .del:hover,.acts .del:focus-visible{color:var(--err)}
-.runmark{display:flex;padding:4px 6px;color:#5fb878}
+.runmark{display:flex;padding:4px 6px;color:var(--ok)}
 .rnwrap{padding:3px 10px 6px}
 .rn{width:100%;background:var(--bg);color:var(--text);border:1px solid var(--accent);border-radius:3px;padding:3px 6px;font:13px system-ui,sans-serif}
 .rnerr{color:var(--err);font-size:12px;padding-top:3px}
@@ -125,12 +235,12 @@ li.CodeMirror-hint-active .cm-hint-doc{color:#e8e8e8}
 .fdel{display:flex;border:0;background:transparent;color:var(--muted);padding:4px 8px;opacity:.6}
 .fdel:hover,.fdel:focus-visible{opacity:1;color:var(--err)}
 .fitem{display:flex;align-items:center;gap:8px;width:100%;text-align:left;border:0;border-radius:0;background:transparent;padding:5px 14px;font-size:13px;color:var(--text)}
-.fitem:hover{background:#2f3136}
-.fitem.on{background:#33415c}
+.fitem:hover{background:var(--file-hover-bg)}
+.fitem.on{background:var(--file-sel-bg)}
 .fitem .ro{margin-left:auto;font-size:11px;color:var(--muted)}
 .ficon{flex:none;width:18px;height:18px;display:block}
 .ftab{display:flex;align-items:center;gap:8px;padding:6px 14px;font-size:13px;color:var(--text);background:var(--bg);box-shadow:inset 0 -2px 0 var(--accent);white-space:nowrap}
-#veil{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:10}
+#veil{position:fixed;inset:0;background:var(--veil);display:flex;align-items:center;justify-content:center;z-index:10}
 #dlg{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:20px 22px;max-width:420px;width:calc(100% - 32px);box-shadow:0 10px 30px rgba(0,0,0,.5)}
 #dlg h2{margin:0 0 8px;font-size:16px}
 #dlg p{margin:0 0 18px;color:var(--muted);line-height:1.5}
@@ -138,18 +248,24 @@ li.CodeMirror-hint-active .cm-hint-doc{color:#e8e8e8}
 #yes{background:var(--err);border-color:var(--err);color:#fff;font-weight:600}
 #undoReset{border-color:var(--accent);color:var(--accent)}
 [hidden]{display:none!important}
+
+/* Respect the OS "reduce motion" setting: no spinning, sliding-in test cards, or
+   animated progress-bar fills for anyone who's asked for less motion. */
+@media(prefers-reduced-motion: reduce){
+  .spin{animation:none}
+  .testCase{animation:none;opacity:1;transform:none}
+  .testBarFill{transition:none}
+}
+
 @media(max-width:800px){main{grid-template-columns:1fr;grid-template-rows:auto 1fr 1fr}.explorer .list{flex-direction:row;flex-wrap:wrap}.fitem{width:auto}.explorer{border-right:0;border-bottom:1px solid var(--line)}.editor{border-right:0;border-bottom:1px solid var(--line)}}
 
 </style>
 </head>
 <body>
+<a class="skipLink" href="#code">Skip to code editor</a>
 <header>
   <h1 id="title">PHP Editor</h1>
   <select id="picker" aria-label="Question" hidden></select>
-  <button id="hint" hidden></button>
-  <button id="undoDelete" hidden>Undo delete</button>
-  <button id="undoReset" hidden>Undo reset</button>
-  <button id="reset">Reset code</button>
   <button id="run">Run (Ctrl+Enter)</button>
 </header>
 <main>
@@ -157,7 +273,9 @@ li.CodeMirror-hint-active .cm-hint-doc{color:#e8e8e8}
   <section class="editor">
     <div class="bar"><div id="filetabs"></div><div class="tools"><button id="format" title="Format code (Shift+Alt+F)" aria-label="Format code"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><path d="M13.5 1C13.7761 1 14 1.22386 14 1.5V2H14.5C14.7761 2 15 2.22386 15 2.5C15 2.77614 14.7761 3 14.5 3H14V3.5C14 3.77614 13.7761 4 13.5 4C13.2239 4 13 3.77614 13 3.5V3H12.5C12.2239 3 12 2.77614 12 2.5C12 2.22386 12.2239 2 12.5 2H13V1.5C13 1.22386 13.2239 1 13.5 1ZM3.5 3C3.77615 3 4 3.22386 4 3.5V4H4.5C4.77615 4 5 4.22386 5 4.5C5 4.77614 4.77615 5 4.5 5H4V5.5C4 5.77614 3.77615 6 3.5 6C3.22386 6 3 5.77614 3 5.5V5H2.5C2.22386 5 2 4.77614 2 4.5C2 4.22386 2.22386 4 2.5 4H3V3.5C3 3.22386 3.22386 3 3.5 3ZM12.5 12C12.7761 12 13 11.7761 13 11.5C13 11.2239 12.7761 11 12.5 11H12V10.5C12 10.2239 11.7761 10 11.5 10C11.2239 10 11 10.2239 11 10.5V11H10.5C10.2239 11 10 11.2239 10 11.5C10 11.7761 10.2239 12 10.5 12H11V12.5C11 12.7761 11.2239 13 11.5 13C11.7761 13 12 12.7761 12 12.5V12H12.5ZM8.72956 4.56346C9.4771 3.81592 10.6891 3.81592 11.4367 4.56347C12.1842 5.31102 12.1842 6.52303 11.4367 7.27058L4.26679 14.4404C3.51924 15.1879 2.30723 15.1879 1.55968 14.4404C0.812134 13.6928 0.812138 12.4808 1.55969 11.7333L8.72956 4.56346Z" fill="currentColor" stroke="none"/></svg></button><button id="undo" title="Undo (Ctrl+Z)" aria-label="Undo" disabled><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg></button><button id="redo" title="Redo (Ctrl+Y)" aria-label="Redo" disabled><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 14 20 9 15 4"/><path d="M4 20v-7a4 4 0 0 1 4-4h12"/></svg></button></div></div>
     <div id="formatMsg" hidden role="alert"></div>
-    <textarea id="code"></textarea>
+    <div id="mdBar" hidden><button id="mdToggle" aria-pressed="false">View source</button><span id="mdNote" class="mdNote">Read-only</span></div>
+    <div id="mdPreview" class="markdown-body" hidden tabindex="0" aria-label="Rendered Markdown preview"></div>
+    <textarea id="code" aria-label="Code editor"></textarea>
   </section>
   <section class="side">
     <div class="bar" id="viewtabs">
@@ -166,20 +284,59 @@ li.CodeMirror-hint-active .cm-hint-doc{color:#e8e8e8}
       <button id="vTests" hidden>Tests</button>
     </div>
     <iframe id="frame" title="Page preview" sandbox="allow-scripts allow-forms"></iframe>
-    <pre id="out" hidden></pre>
+    <pre id="out" hidden aria-live="polite"></pre>
     <div id="testPanel" hidden>
       <button id="runTests">Run tests</button>
       <p class="testNote">Runs your current code through the real PHP interpreter with each set of inputs below, and compares the "Final amount" it produces against the expected answer.</p>
-      <div id="testResults"></div>
+      <div id="testResults" aria-live="polite"></div>
     </div>
     <div id="stdinbox" hidden><h2>Input (one value per line)</h2><textarea id="stdin" spellcheck="false" aria-label="Program input"></textarea></div>
-    <div id="hints"></div>
-    <div id="funcsSection" hidden>
-      <button id="funcsBtn" aria-expanded="false" aria-controls="funcsPanel">PHP function reference</button>
-      <div id="funcsPanel" hidden></div>
+    <div id="hintsSection" class="accordionSection" hidden>
+      <button id="hintsToggle" class="accordionBtn" aria-expanded="false" aria-controls="hints">
+        <svg class="chev" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 6l4 4 4-4"/></svg>
+        <span id="hintsToggleLabel">Hints</span>
+      </button>
+      <div id="hints" class="accordionPanel" hidden></div>
+    </div>
+    <div id="funcsSection" class="accordionSection" hidden>
+      <button id="funcsBtn" class="accordionBtn" aria-expanded="false" aria-controls="funcsPanel">
+        <svg class="chev" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 6l4 4 4-4"/></svg>
+        <span id="funcsBtnLabel">PHP function reference</span>
+      </button>
+      <div id="funcsPanel" class="accordionPanel" hidden></div>
     </div>
   </section>
 </main>
+<footer id="statusbar" aria-label="Editor status bar">
+  <div class="sbCluster">
+    <div class="sbGroup">
+      <button id="reset" class="sbBtn">Reset code</button>
+      <button id="undoDelete" class="sbBtn" hidden>Undo delete</button>
+      <button id="undoReset" class="sbBtn" hidden>Undo reset</button>
+    </div>
+    <span class="sbDivider" aria-hidden="true"></span>
+    <div class="sbGroup">
+      <button id="hint" class="sbBtn" hidden></button>
+    </div>
+  </div>
+  <div class="sbGroup">
+    <div class="sbZoom" role="group" aria-label="Zoom">
+      <svg class="sbZoomIcon" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="6.5" cy="6.5" r="4.5"/><path d="M13.5 13.5L10 10" stroke-linecap="round"/></svg>
+      <button id="zoomOut" class="sbBtn sbZoomBtn" title="Zoom out (Ctrl + -, or Ctrl + scroll down)" aria-label="Zoom out">&minus;</button>
+      <button id="zoomLevel" class="sbBtn" title="Reset zoom (Ctrl + 0)" aria-label="Reset zoom">100%</button>
+      <button id="zoomIn" class="sbBtn sbZoomBtn" title="Zoom in (Ctrl + +, or Ctrl + scroll up)" aria-label="Zoom in">+</button>
+    </div>
+    <label class="sbLabel">Theme
+      <select id="themePicker" aria-label="Theme">
+        <option value="system">System</option>
+        <option value="dark">Dark</option>
+        <option value="light">Light</option>
+        <option value="high-contrast">High contrast</option>
+        <option value="solarized">Solarized dark</option>
+      </select>
+    </label>
+  </div>
+</footer>
 <div id="veil" hidden>
   <div id="dlg" role="alertdialog" aria-modal="true" aria-labelledby="dlgT" aria-describedby="dlgB">
     <h2 id="dlgT">Reset all code?</h2>
@@ -253,6 +410,43 @@ const QUESTIONS = {
       'Use number_format($value, 2) when you display each dollar amount.'
     ],
     files: [
+      { name: 'README.md', editable: false, code: `# Part 1 – Variables, Expressions, and Conditionals
+
+## Goal
+Finish \`index.php\` so the Student Café order form correctly calculates and displays the total cost of an order.
+
+## Rules for this part
+- Use **plain variables and expressions only** - no functions and no arrays in Part 1 (that comes in Parts 2 and 3).
+- The three item prices are already set for you:
+
+  | Item | Price |
+  |---|---|
+  | Sandwich | \`$8.50\` |
+  | Drink | \`$2.50\` |
+  | Dessert | \`$4.00\` |
+
+## What to build
+When the form is submitted, fill in the \`// TODO\` sections so the page calculates, in order:
+
+1. \`$sandwichCost\`, \`$drinkCost\`, and \`$dessertCost\` - each quantity times its price.
+2. \`$subtotal\` - the three costs added together.
+3. \`$discount\` - **10%** of the subtotal, but only when the subtotal is **$30 or more**; otherwise \`$0\`. Use \`if\`/\`else\`.
+4. \`$tax\` - **5%** of the subtotal *after* the discount has been subtracted.
+5. \`$final\` - the subtotal, minus the discount, plus the tax.
+
+Then echo each amount into its matching table cell, using \`number_format($value, 2)\` so every dollar amount always shows two decimal places.
+
+## Testing your code
+Open the **Tests** tab on the right and click **Run tests**. Your code is checked against the real PHP interpreter with a few different orders, and the final amount is compared to the expected total.
+
+## Files in this project
+| File | Can I edit it? |
+|---|---|
+| \`index.php\` | ✅ Yes - this is the only file you need to change |
+| \`style.css\` | 🔒 Read-only - provided styling |
+| \`script.js\` | 🔒 Read-only - a small helper script |
+| \`README.md\` | 🔒 Read-only - this file |
+` },
       { name: 'index.php', editable: true, code: `<?php
 // Part 1 - Variables, Expressions, and Conditionals
 // Do not use functions or arrays in this part.
@@ -350,6 +544,46 @@ button{margin-top:6px;padding:8px 16px;background:#7a3b1d;color:#fff;border:0;bo
       'Call each function and store its return value, e.g. $subtotal = calculateSubtotal($sandwichCost, $drinkCost, $dessertCost);'
     ],
     files: [
+      { name: 'README.md', editable: false, code: `# Part 2 – Refactor Using Functions
+
+## Goal
+Take the same Café order calculation from Part 1 and rebuild it using **functions**, so the calculation logic is defined once and reused.
+
+## What to build
+Three functions are already declared at the top of \`index.php\`, each with a \`// TODO\` for its body:
+
+1. \`calculateSubtotal(float $sandwichCost, float $drinkCost, float $dessertCost): float\`
+   Return the sum of the three item costs.
+2. \`calculateDiscount(float $subtotal): float\`
+   Return **10%** of \`$subtotal\` when it is **$30 or more**, otherwise return \`0\`.
+3. \`calculateTax(float $amountAfterDiscount): float\`
+   Return **5%** of the amount passed in.
+
+Then, further down, call each function and store its return value:
+
+\`\`\`php
+$subtotal = calculateSubtotal($sandwichCost, $drinkCost, $dessertCost);
+$discount = calculateDiscount($subtotal);
+$tax      = calculateTax($subtotal - $discount);
+$final    = $subtotal - $discount + $tax;
+\`\`\`
+
+Finally, echo each amount into its table cell with \`number_format($value, 2)\`, exactly as in Part 1.
+
+## Why functions?
+Functions let you name a calculation once and reuse it - and they make each piece of logic easy to test on its own. The item costs (\`$sandwichCost\`, etc.) are still calculated directly with variables; only the subtotal/discount/tax steps move into functions.
+
+## Testing your code
+Open the **Tests** tab and click **Run tests** - the same 3 official test orders from Part 1 are used to check your final amount.
+
+## Files in this project
+| File | Can I edit it? |
+|---|---|
+| \`index.php\` | ✅ Yes - this is the only file you need to change |
+| \`style.css\` | 🔒 Read-only - provided styling |
+| \`script.js\` | 🔒 Read-only - a small helper script |
+| \`README.md\` | 🔒 Read-only - this file |
+` },
       { name: 'index.php', editable: true, code: `<?php
 // Part 2 - Refactor Using Functions
 
@@ -456,6 +690,46 @@ button{margin-top:6px;padding:8px 16px;background:#2d6a4f;color:#fff;border:0;bo
       'You can read a specific cost back out for display with $costs["sandwich"], $costs["drink"] and $costs["dessert"].'
     ],
     files: [
+      { name: 'README.md', editable: false, code: `# Part 3 – Refactor Using Associative Arrays
+
+## Goal
+Rebuild the Café order calculation once more, this time storing the prices, quantities, and item costs in **associative arrays** instead of separate variables for each item.
+
+## What's already there
+\`$prices\` is an associative array mapping each item name to its price:
+
+\`\`\`php
+$prices = [
+    "sandwich" => 8.50,
+    "drink"    => 2.50,
+    "dessert"  => 4.00,
+];
+\`\`\`
+
+\`$quantities\` is built the same way from the submitted form values, and an empty \`$costs = [];\` array is ready for you to fill in.
+
+## What to build
+1. Loop over \`$prices\` with \`foreach ($prices as $item => $price)\` and set \`$costs[$item] = $price * $quantities[$item];\` for each item.
+2. Calculate \`$subtotal\` from \`$costs\` - try the built-in \`array_sum()\` function instead of adding the three values by hand.
+3. Calculate \`$discount\` (**10%** when the subtotal is **$30 or more**, otherwise \`0\`) and \`$tax\` (**5%** of the subtotal after the discount) - same rules as Parts 1 and 2.
+4. Calculate \`$final\`.
+
+Then echo each amount into its table cell. You can read an individual item's cost back out of the array, e.g. \`$costs['sandwich']\`, \`$costs['drink']\`, \`$costs['dessert']\`. Use \`number_format($value, 2)\` for every dollar amount, as before.
+
+## Why arrays?
+Arrays let this scale to any number of menu items without adding a new variable (and a new line of near-identical code) for each one - the same \`foreach\` loop handles all of them.
+
+## Testing your code
+Open the **Tests** tab and click **Run tests** - the same 3 official test orders are used to check your final amount.
+
+## Files in this project
+| File | Can I edit it? |
+|---|---|
+| \`index.php\` | ✅ Yes - this is the only file you need to change |
+| \`style.css\` | 🔒 Read-only - provided styling |
+| \`script.js\` | 🔒 Read-only - a small helper script |
+| \`README.md\` | 🔒 Read-only - this file |
+` },
       { name: 'index.php', editable: true, code: `<?php
 // Part 3 - Refactor Using Associative Arrays
 
@@ -550,7 +824,7 @@ button{margin-top:6px;padding:8px 16px;background:#4a3f8c;color:#fff;border:0;bo
 };
 
 /* File icons: the MIT-licensed VS Code (vscode-icons) file-type icons for PHP, CSS, JS and HTML, embedded so no download is needed. */
-const ICON_SVG = {"php": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 32 32\"><defs><radialGradient id=\"SVGQRCVdbYF\" cx=\"-16.114\" cy=\"20.532\" r=\"18.384\" gradientTransform=\"translate(26.52 -9.307)\" gradientUnits=\"userSpaceOnUse\"><stop offset=\"0\" stop-color=\"#fff\"/><stop offset=\".5\" stop-color=\"#4c6b96\"/><stop offset=\"1\" stop-color=\"#231f20\"/></radialGradient></defs><ellipse cx=\"16\" cy=\"16\" fill=\"url(#SVGQRCVdbYF)\" rx=\"14\" ry=\"7.365\"/><ellipse cx=\"16\" cy=\"16\" fill=\"#6280b6\" rx=\"13.453\" ry=\"6.818\"/><path fill=\"#fff\" d=\"m18.725 18.2l.667-3.434a1.75 1.75 0 0 0-.372-1.719a2.93 2.93 0 0 0-2-.525h-1.153l.331-1.7a.22.22 0 0 0-.215-.26h-1.6a.22.22 0 0 0-.215.177l-.709 3.646a2.05 2.05 0 0 0-.477-1.054a2.78 2.78 0 0 0-2.2-.807H7.7a.22.22 0 0 0-.215.177l-1.434 7.38a.22.22 0 0 0 .215.26h1.603a.22.22 0 0 0 .215-.177l.347-1.785h1.2a5.2 5.2 0 0 0 1.568-.2a3.1 3.1 0 0 0 1.15-.689a3.5 3.5 0 0 0 .68-.844l-.287 1.475a.22.22 0 0 0 .215.26h1.6a.22.22 0 0 0 .215-.177l.787-4.051h1.094c.466 0 .6.093.64.133s.1.165.025.569l-.635 3.265a.22.22 0 0 0 .215.26h1.62a.22.22 0 0 0 .207-.18m-7.395-2.834a1.75 1.75 0 0 1-.561 1.092a2.17 2.17 0 0 1-1.315.321h-.712l.515-2.651h.921c.677 0 .949.145 1.059.266a1.18 1.18 0 0 1 .093.972m14.216-2.034a2.78 2.78 0 0 0-2.2-.807h-3.091a.22.22 0 0 0-.215.177l-1.434 7.38a.22.22 0 0 0 .215.26h1.608a.22.22 0 0 0 .215-.177l.347-1.785h1.2a5.2 5.2 0 0 0 1.568-.2a3.1 3.1 0 0 0 1.15-.689a3.43 3.43 0 0 0 1.076-1.927a2.51 2.51 0 0 0-.439-2.232m-1.667 2.034a1.75 1.75 0 0 1-.561 1.092a2.17 2.17 0 0 1-1.318.32h-.71l.515-2.651h.921c.677 0 .949.145 1.059.266a1.18 1.18 0 0 1 .094.973\"/><path fill=\"#000004\" d=\"M10.178 13.908a1.65 1.65 0 0 1 1.221.338a1.34 1.34 0 0 1 .145 1.161a1.95 1.95 0 0 1-.642 1.223a2.36 2.36 0 0 1-1.448.37h-.978l.6-3.089Zm-3.917 6.216h1.608l.381-1.962h1.377a5 5 0 0 0 1.5-.191a2.84 2.84 0 0 0 1.07-.642a3.2 3.2 0 0 0 1.01-1.808a2.3 2.3 0 0 0-.385-2.044a2.57 2.57 0 0 0-2.035-.732H7.7Zm8.126-9.342h1.6l-.387 1.962h1.421a2.77 2.77 0 0 1 1.85.468a1.55 1.55 0 0 1 .305 1.516l-.667 3.434H16.89l.635-3.265a.89.89 0 0 0-.08-.76a1.12 1.12 0 0 0-.8-.2H15.37l-.822 4.228h-1.6Zm8.34 3.126a1.65 1.65 0 0 1 1.221.338a1.34 1.34 0 0 1 .145 1.161a1.95 1.95 0 0 1-.642 1.223A2.36 2.36 0 0 1 22 17h-.978l.6-3.089Zm-3.917 6.216h1.608l.381-1.962h1.377a5 5 0 0 0 1.5-.191a2.84 2.84 0 0 0 1.07-.642a3.2 3.2 0 0 0 1.01-1.808a2.3 2.3 0 0 0-.385-2.044a2.57 2.57 0 0 0-2.035-.732h-3.092Z\"/></svg>", "css": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 32 32\"><path fill=\"#639\" d=\"M1.995 1.994h23.52a4.48 4.48 0 0 1 4.48 4.48v19.04a4.48 4.48 0 0 1-4.48 4.48H6.475a4.48 4.48 0 0 1-4.48-4.48Z\"/><path fill=\"#fff\" d=\"M9.079 24.87v-4.704c0-1.876 1.204-2.884 3.024-2.884c1.792-.028 2.912 1.148 2.856 3.136h-2.072c.056-.756-.28-1.316-.84-1.288c-.7 0-.896.476-.896 1.372v4.088c0 .868.28 1.288.896 1.316c.644 0 .896-.644.84-1.372h2.072c.112 2.044-1.176 3.248-2.996 3.22c-1.764 0-2.884-.98-2.884-2.884m6.636-.336h1.932c.028.896.308 1.456.924 1.456s.84-.364.84-1.204c0-.7-.308-1.092-1.064-1.456l-.728-.336c-1.288-.616-1.82-1.372-1.82-2.884c0-1.68 1.064-2.856 2.8-2.856s2.66 1.204 2.688 3.164h-1.876c0-.812-.168-1.372-.784-1.372c-.56 0-.84.28-.84.98s.252.98.924 1.26l.672.308c1.428.672 2.044 1.54 2.044 3.164c0 1.932-1.092 2.996-2.884 2.996s-2.8-1.232-2.828-3.22m6.328 0h1.96c0 .896.308 1.456.896 1.456s.84-.364.84-1.204c0-.7-.28-1.092-1.064-1.456l-.728-.336c-1.288-.616-1.792-1.372-1.792-2.884c0-1.68 1.036-2.856 2.8-2.856s2.632 1.204 2.688 3.164h-1.876c-.028-.812-.196-1.372-.812-1.372c-.56 0-.812.28-.812.98s.224.98.896 1.26l.7.308c1.4.672 2.016 1.54 2.016 3.164c0 1.932-1.092 2.996-2.884 2.996s-2.8-1.232-2.828-3.22\"/></svg>", "js": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 32 32\"><path fill=\"#f5de19\" d=\"M2 2h28v28H2z\"/><path d=\"M20.809 23.875a2.87 2.87 0 0 0 2.6 1.6c1.09 0 1.787-.545 1.787-1.3c0-.9-.716-1.222-1.916-1.747l-.658-.282c-1.9-.809-3.16-1.822-3.16-3.964c0-1.973 1.5-3.476 3.853-3.476a3.89 3.89 0 0 1 3.742 2.107L25 18.128A1.79 1.79 0 0 0 23.311 17a1.145 1.145 0 0 0-1.259 1.128c0 .789.489 1.109 1.618 1.6l.658.282c2.236.959 3.5 1.936 3.5 4.133c0 2.369-1.861 3.667-4.36 3.667a5.06 5.06 0 0 1-4.795-2.691Zm-9.295.228c.413.733.789 1.353 1.693 1.353c.864 0 1.41-.338 1.41-1.653v-8.947h2.631v8.982c0 2.724-1.6 3.964-3.929 3.964a4.085 4.085 0 0 1-3.947-2.4Z\"/></svg>", "html": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 32 32\"><path fill=\"#e44f26\" d=\"M5.902 27.201L3.655 2h24.69l-2.25 25.197L15.985 30z\"/><path fill=\"#f1662a\" d=\"m16 27.858l8.17-2.265l1.922-21.532H16z\"/><path fill=\"#ebebeb\" d=\"M16 13.407h-4.09l-.282-3.165H16V7.151H8.25l.074.83l.759 8.517H16zm0 8.027l-.014.004l-3.442-.929l-.22-2.465H9.221l.433 4.852l6.332 1.758l.014-.004z\"/><path fill=\"#fff\" d=\"M15.989 13.407v3.091h3.806l-.358 4.009l-3.448.93v3.216l6.337-1.757l.046-.522l.726-8.137l.076-.83zm0-6.256v3.091h7.466l.062-.694l.141-1.567l.074-.83z\"/></svg>", "other": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 32 32\"><path fill=\"#c5c5c5\" d=\"M20.414 2H5v28h22V8.586ZM7 28V4h12v6h6v18Z\"/></svg>"};
+const ICON_SVG = {"php": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 32 32\"><defs><radialGradient id=\"SVGQRCVdbYF\" cx=\"-16.114\" cy=\"20.532\" r=\"18.384\" gradientTransform=\"translate(26.52 -9.307)\" gradientUnits=\"userSpaceOnUse\"><stop offset=\"0\" stop-color=\"#fff\"/><stop offset=\".5\" stop-color=\"#4c6b96\"/><stop offset=\"1\" stop-color=\"#231f20\"/></radialGradient></defs><ellipse cx=\"16\" cy=\"16\" fill=\"url(#SVGQRCVdbYF)\" rx=\"14\" ry=\"7.365\"/><ellipse cx=\"16\" cy=\"16\" fill=\"#6280b6\" rx=\"13.453\" ry=\"6.818\"/><path fill=\"#fff\" d=\"m18.725 18.2l.667-3.434a1.75 1.75 0 0 0-.372-1.719a2.93 2.93 0 0 0-2-.525h-1.153l.331-1.7a.22.22 0 0 0-.215-.26h-1.6a.22.22 0 0 0-.215.177l-.709 3.646a2.05 2.05 0 0 0-.477-1.054a2.78 2.78 0 0 0-2.2-.807H7.7a.22.22 0 0 0-.215.177l-1.434 7.38a.22.22 0 0 0 .215.26h1.603a.22.22 0 0 0 .215-.177l.347-1.785h1.2a5.2 5.2 0 0 0 1.568-.2a3.1 3.1 0 0 0 1.15-.689a3.5 3.5 0 0 0 .68-.844l-.287 1.475a.22.22 0 0 0 .215.26h1.6a.22.22 0 0 0 .215-.177l.787-4.051h1.094c.466 0 .6.093.64.133s.1.165.025.569l-.635 3.265a.22.22 0 0 0 .215.26h1.62a.22.22 0 0 0 .207-.18m-7.395-2.834a1.75 1.75 0 0 1-.561 1.092a2.17 2.17 0 0 1-1.315.321h-.712l.515-2.651h.921c.677 0 .949.145 1.059.266a1.18 1.18 0 0 1 .093.972m14.216-2.034a2.78 2.78 0 0 0-2.2-.807h-3.091a.22.22 0 0 0-.215.177l-1.434 7.38a.22.22 0 0 0 .215.26h1.608a.22.22 0 0 0 .215-.177l.347-1.785h1.2a5.2 5.2 0 0 0 1.568-.2a3.1 3.1 0 0 0 1.15-.689a3.43 3.43 0 0 0 1.076-1.927a2.51 2.51 0 0 0-.439-2.232m-1.667 2.034a1.75 1.75 0 0 1-.561 1.092a2.17 2.17 0 0 1-1.318.32h-.71l.515-2.651h.921c.677 0 .949.145 1.059.266a1.18 1.18 0 0 1 .094.973\"/><path fill=\"#000004\" d=\"M10.178 13.908a1.65 1.65 0 0 1 1.221.338a1.34 1.34 0 0 1 .145 1.161a1.95 1.95 0 0 1-.642 1.223a2.36 2.36 0 0 1-1.448.37h-.978l.6-3.089Zm-3.917 6.216h1.608l.381-1.962h1.377a5 5 0 0 0 1.5-.191a2.84 2.84 0 0 0 1.07-.642a3.2 3.2 0 0 0 1.01-1.808a2.3 2.3 0 0 0-.385-2.044a2.57 2.57 0 0 0-2.035-.732H7.7Zm8.126-9.342h1.6l-.387 1.962h1.421a2.77 2.77 0 0 1 1.85.468a1.55 1.55 0 0 1 .305 1.516l-.667 3.434H16.89l.635-3.265a.89.89 0 0 0-.08-.76a1.12 1.12 0 0 0-.8-.2H15.37l-.822 4.228h-1.6Zm8.34 3.126a1.65 1.65 0 0 1 1.221.338a1.34 1.34 0 0 1 .145 1.161a1.95 1.95 0 0 1-.642 1.223A2.36 2.36 0 0 1 22 17h-.978l.6-3.089Zm-3.917 6.216h1.608l.381-1.962h1.377a5 5 0 0 0 1.5-.191a2.84 2.84 0 0 0 1.07-.642a3.2 3.2 0 0 0 1.01-1.808a2.3 2.3 0 0 0-.385-2.044a2.57 2.57 0 0 0-2.035-.732h-3.092Z\"/></svg>", "css": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 32 32\"><path fill=\"#639\" d=\"M1.995 1.994h23.52a4.48 4.48 0 0 1 4.48 4.48v19.04a4.48 4.48 0 0 1-4.48 4.48H6.475a4.48 4.48 0 0 1-4.48-4.48Z\"/><path fill=\"#fff\" d=\"M9.079 24.87v-4.704c0-1.876 1.204-2.884 3.024-2.884c1.792-.028 2.912 1.148 2.856 3.136h-2.072c.056-.756-.28-1.316-.84-1.288c-.7 0-.896.476-.896 1.372v4.088c0 .868.28 1.288.896 1.316c.644 0 .896-.644.84-1.372h2.072c.112 2.044-1.176 3.248-2.996 3.22c-1.764 0-2.884-.98-2.884-2.884m6.636-.336h1.932c.028.896.308 1.456.924 1.456s.84-.364.84-1.204c0-.7-.308-1.092-1.064-1.456l-.728-.336c-1.288-.616-1.82-1.372-1.82-2.884c0-1.68 1.064-2.856 2.8-2.856s2.66 1.204 2.688 3.164h-1.876c0-.812-.168-1.372-.784-1.372c-.56 0-.84.28-.84.98s.252.98.924 1.26l.672.308c1.428.672 2.044 1.54 2.044 3.164c0 1.932-1.092 2.996-2.884 2.996s-2.8-1.232-2.828-3.22m6.328 0h1.96c0 .896.308 1.456.896 1.456s.84-.364.84-1.204c0-.7-.28-1.092-1.064-1.456l-.728-.336c-1.288-.616-1.792-1.372-1.792-2.884c0-1.68 1.036-2.856 2.8-2.856s2.632 1.204 2.688 3.164h-1.876c-.028-.812-.196-1.372-.812-1.372c-.56 0-.812.28-.812.98s.224.98.896 1.26l.7.308c1.4.672 2.016 1.54 2.016 3.164c0 1.932-1.092 2.996-2.884 2.996s-2.8-1.232-2.828-3.22\"/></svg>", "js": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 32 32\"><path fill=\"#f5de19\" d=\"M2 2h28v28H2z\"/><path d=\"M20.809 23.875a2.87 2.87 0 0 0 2.6 1.6c1.09 0 1.787-.545 1.787-1.3c0-.9-.716-1.222-1.916-1.747l-.658-.282c-1.9-.809-3.16-1.822-3.16-3.964c0-1.973 1.5-3.476 3.853-3.476a3.89 3.89 0 0 1 3.742 2.107L25 18.128A1.79 1.79 0 0 0 23.311 17a1.145 1.145 0 0 0-1.259 1.128c0 .789.489 1.109 1.618 1.6l.658.282c2.236.959 3.5 1.936 3.5 4.133c0 2.369-1.861 3.667-4.36 3.667a5.06 5.06 0 0 1-4.795-2.691Zm-9.295.228c.413.733.789 1.353 1.693 1.353c.864 0 1.41-.338 1.41-1.653v-8.947h2.631v8.982c0 2.724-1.6 3.964-3.929 3.964a4.085 4.085 0 0 1-3.947-2.4Z\"/></svg>", "html": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 32 32\"><path fill=\"#e44f26\" d=\"M5.902 27.201L3.655 2h24.69l-2.25 25.197L15.985 30z\"/><path fill=\"#f1662a\" d=\"m16 27.858l8.17-2.265l1.922-21.532H16z\"/><path fill=\"#ebebeb\" d=\"M16 13.407h-4.09l-.282-3.165H16V7.151H8.25l.074.83l.759 8.517H16zm0 8.027l-.014.004l-3.442-.929l-.22-2.465H9.221l.433 4.852l6.332 1.758l.014-.004z\"/><path fill=\"#fff\" d=\"M15.989 13.407v3.091h3.806l-.358 4.009l-3.448.93v3.216l6.337-1.757l.046-.522l.726-8.137l.076-.83zm0-6.256v3.091h7.466l.062-.694l.141-1.567l.074-.83z\"/></svg>", "other": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 32 32\"><path fill=\"#c5c5c5\" d=\"M20.414 2H5v28h22V8.586ZM7 28V4h12v6h6v18Z\"/></svg>", "md": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 32 32\"><rect x=\"1\" y=\"6\" width=\"30\" height=\"20\" rx=\"3\" fill=\"#1a1a1a\" stroke=\"#c5c5c5\" stroke-width=\"1\"/><path fill=\"#fff\" d=\"M7 21V11h2.3l3.2 4 3.2-4h2.3v10h-2.3v-6.6l-3.2 4-3.2-4V21H7Z\"/><path fill=\"#fff\" d=\"M22.5 11h2.3v4.8h2.2l-3.35 4.3-3.35-4.3h2.2V11Z\"/></svg>"};
 ICON_SVG.folder = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 32 32\"><path fill=\"#c09553\" d=\"M27.5 5.5h-9.3l-2.1 4.2H4.4v16.8h25.2v-21Zm0 4.2h-8.2l1.1-2.1h7.1Z\"/></svg>";
 ICON_SVG.folderOpen = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 32 32\"><path fill=\"#dcb67a\" d=\"M27.4 5.5h-9.2l-2.1 4.2H4.3v16.8h25.2v-21Zm0 18.7H6.6V11.8h20.8Zm0-14.5h-8.2l1-2.1h7.1v2.1Z\"/><path fill=\"#dcb67a\" d=\"M25.7 13.7H.5l3.8 12.8h25.2z\"/></svg>";
 const ICON_URI = {};
@@ -582,8 +856,8 @@ const params = new URLSearchParams(location.search);
 let key = QUESTIONS[params.get('q')] ? params.get('q') : (params.get('q') ? 'blank' : 'part1');
 let docs = {}, custom = [], folders = [], open = new Set(), selDir = '', renaming = null, newMode = 'file', mainName = '', trash = [], cur = '', shown = 0, req = { m: 'get', d: {} };
 
-const MODES = { php: 'application/x-httpd-php', css: 'css', js: 'javascript', html: 'htmlmixed', json: 'application/json', txt: 'text/plain' };
-const ALLOWED = ['php', 'css', 'js', 'html', 'txt', 'json'], MAX_CUSTOM = 15, MAX_FOLDERS = 8;
+const MODES = { php: 'application/x-httpd-php', css: 'css', js: 'javascript', html: 'htmlmixed', json: 'application/json', txt: 'text/plain', md: 'text/plain' };
+const ALLOWED = ['php', 'css', 'js', 'html', 'txt', 'json', 'md'], MAX_CUSTOM = 15, MAX_FOLDERS = 8;
 const modeOf = n => MODES[n.split('.').pop()] || 'text/plain';
 
 const store = (k, v) => { try { v === undefined ? sessionStorage.removeItem(k) : sessionStorage.setItem(k, v); } catch (e) {} };
@@ -621,6 +895,7 @@ function showFile(name) {
   cm.setOption('readOnly', metaOf(name).editable ? false : 'nocursor');
   $('format').disabled = !(metaOf(name).editable && name.endsWith('.php'));
   $('formatMsg').hidden = true;
+  applyFileView(name);
   renderTabs();
 }
 // Returns an error message, or '' when the path is fine. `ignore` = the item being renamed.
@@ -634,7 +909,7 @@ function checkPath(path, isFolder, ignore) {
   }
   if (!isFolder) {
     const b = baseOf(path);
-    if (!b.includes('.') || !ALLOWED.includes(b.split('.').pop().toLowerCase())) return 'The name must end in .php, .css, .js, .html, .txt or .json';
+    if (!b.includes('.') || !ALLOWED.includes(b.split('.').pop().toLowerCase())) return 'The name must end in .php, .css, .js, .html, .txt, .json or .md';
   }
   const inIgnored = n => ignore && (n === ignore || n.startsWith(ignore + '/'));
   const files = allNames().filter(n => !inIgnored(n)), dirs = allFolders().filter(d => !inIgnored(d)), low = path.toLowerCase();
@@ -765,6 +1040,12 @@ const cm = CodeMirror.fromTextArea($('code'), {
     'Ctrl-/': toggleLineComment, 'Cmd-/': toggleLineComment
   }
 });
+// Screen readers otherwise announce CodeMirror's hidden input with no name at all.
+cm.getInputField().setAttribute('aria-label', 'Code editor');
+// The "Skip to code editor" link targets the original <textarea>, which CodeMirror
+// hides and replaces with its own focusable widget - so jump straight to that instead.
+const skipLink = document.querySelector('.skipLink');
+if (skipLink) skipLink.addEventListener('click', e => { e.preventDefault(); cm.focus(); });
 
 function renameRow(path, isFolder, depth) {
   const w = document.createElement('div'), i = document.createElement('input'), e = document.createElement('div');
@@ -856,7 +1137,10 @@ function loadQuestion() {
   $('stdinbox').hidden = q.stdin === undefined;
   $('stdin').value = load('stdin:' + key) ?? (q.stdin || '');
   $('vPrev').hidden = !q.preview;
-  shown = 0; $('hints').style.display = 'none'; $('hints').innerHTML = '';
+  shown = 0; $('hints').innerHTML = ''; $('hints').hidden = true;
+  $('hintsSection').hidden = !q.hints?.length;
+  $('hintsToggle').setAttribute('aria-expanded', 'false');
+  $('hintsToggleLabel').textContent = 'Hints';
   const hb = $('hint'); hb.hidden = !q.hints?.length; hb.disabled = false;
   hb.textContent = 'Show hint (0/' + (q.hints?.length || 0) + ')';
   $('out').innerHTML = '<span class="m">Press Run to see your result here.</span>';
@@ -868,7 +1152,7 @@ function loadQuestion() {
   const funcs = q.functions || [];
   $('funcsSection').hidden = !funcs.length;
   $('funcsPanel').hidden = true; $('funcsBtn').setAttribute('aria-expanded', 'false');
-  $('funcsBtn').textContent = 'PHP function reference (' + funcs.length + ')';
+  $('funcsBtnLabel').textContent = 'PHP function reference (' + funcs.length + ')';
   renderFuncs(funcs);
   view(q.preview ? 'prev' : 'out');
   req = { m: 'get', d: {} };
@@ -957,9 +1241,197 @@ $('hint').onclick = () => {
   if (shown >= h.length) return;
   const p = document.createElement('p');
   p.textContent = 'Hint ' + (shown + 1) + ': ' + h[shown++];
-  $('hints').appendChild(p); $('hints').style.display = 'block';
+  $('hints').appendChild(p);
+  // Revealing a hint always opens the accordion so the student can see what
+  // was just added, even if they'd previously collapsed it.
+  $('hints').hidden = false;
+  $('hintsToggle').setAttribute('aria-expanded', 'true');
+  $('hintsToggleLabel').textContent = 'Hints (' + shown + ' of ' + h.length + ')';
   $('hint').textContent = shown < h.length ? 'Show hint (' + shown + '/' + h.length + ')' : 'All hints shown';
   $('hint').disabled = shown >= h.length;
+};
+
+// The accordion header can also be clicked on its own, independent of revealing
+// a new hint - so a student can collapse it out of the way and reopen it later
+// to re-read hints already shown, without that click revealing anything new.
+$('hintsToggle').onclick = () => {
+  const opening = $('hints').hidden;
+  $('hints').hidden = !opening; $('hintsToggle').setAttribute('aria-expanded', String(opening));
+};
+
+// Theme picker (Dark / Light / System / High contrast / Solarized dark) and a zoom
+// control, for students who need a different color scheme or larger text/UI to read
+// and write code comfortably. Colors themselves are defined once in styles.css as CSS
+// custom properties per [data-theme="..."] - this file only decides which one applies
+// and keeps CodeMirror's own syntax-highlighting theme in sync with it.
+//
+// A tiny inline script at the top of index.html already set the initial data-theme
+// attribute before the page paints (avoiding a flash of the wrong theme); this file
+// does the rest: wires up the picker, keeps "System" live if the OS theme changes
+// while the page is open, and switches CodeMirror's theme to match.
+const THEME_OPTIONS = ['system', 'dark', 'light', 'high-contrast', 'solarized'];
+
+function prefersDark() {
+  try { return matchMedia('(prefers-color-scheme: dark)').matches; } catch (e) { return true; }
+}
+function effectiveTheme(pref) { return pref === 'system' ? (prefersDark() ? 'dark' : 'light') : pref; }
+// CodeMirror ships its own light theme ('default', built into the core CSS already
+// loaded - no extra file to fetch) and we already load 'material-darker' for every
+// dark-background theme (dark, high-contrast and solarized are all dark-background).
+const cmThemeFor = eff => eff === 'light' ? 'default' : 'material-darker';
+
+let themePref = load('themePref') || 'system';
+function applyTheme(pref) {
+  themePref = pref;
+  const eff = effectiveTheme(pref);
+  document.documentElement.dataset.theme = eff;
+  document.documentElement.dataset.themePref = pref;
+  if (typeof cm !== 'undefined' && cm.setOption) cm.setOption('theme', cmThemeFor(eff));
+  store('themePref', pref);
+}
+
+// Zoom: a continuous 60%-200% scale (in 10% steps) applied to the whole page via CSS
+// `zoom`, adjustable the way a browser's own zoom works - buttons, Ctrl+= / Ctrl+- /
+// Ctrl+0, and Ctrl+scroll-wheel - rather than a handful of fixed named sizes.
+const ZOOM_MIN = 60, ZOOM_MAX = 200, ZOOM_STEP = 10;
+let zoomPct = parseInt(load('zoomPct'), 10);
+if (!Number.isFinite(zoomPct) || zoomPct < ZOOM_MIN || zoomPct > ZOOM_MAX) zoomPct = 100;
+function setZoom(pct) {
+  zoomPct = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(pct / ZOOM_STEP) * ZOOM_STEP));
+  document.documentElement.style.setProperty('--ui-scale', String(zoomPct / 100));
+  store('zoomPct', String(zoomPct));
+  const lvl = $('zoomLevel');
+  if (lvl) lvl.textContent = zoomPct + '%';
+  const zo = $('zoomOut'), zi = $('zoomIn');
+  if (zo) zo.disabled = zoomPct <= ZOOM_MIN;
+  if (zi) zi.disabled = zoomPct >= ZOOM_MAX;
+  if (typeof cm !== 'undefined' && cm.refresh) cm.refresh();
+}
+const zoomIn = () => setZoom(zoomPct + ZOOM_STEP);
+const zoomOut = () => setZoom(zoomPct - ZOOM_STEP);
+const zoomReset = () => setZoom(100);
+
+const themePicker = $('themePicker');
+if (themePicker) {
+  themePicker.value = themePref;
+  applyTheme(themePref); // re-apply (idempotent with the inline anti-flash script) so the CodeMirror theme gets set too
+  themePicker.onchange = () => applyTheme(themePicker.value);
+}
+setZoom(zoomPct);
+if ($('zoomIn')) $('zoomIn').onclick = zoomIn;
+if ($('zoomOut')) $('zoomOut').onclick = zoomOut;
+if ($('zoomLevel')) $('zoomLevel').onclick = zoomReset;
+
+// Ctrl/Cmd + scroll-wheel zooms, exactly like a browser's own native zoom - and, like
+// a browser, plain scrolling (no modifier) is left completely alone.
+window.addEventListener('wheel', e => {
+  if (!(e.ctrlKey || e.metaKey)) return;
+  e.preventDefault();
+  if (e.deltaY < 0) zoomIn(); else if (e.deltaY > 0) zoomOut();
+}, { passive: false });
+
+// Ctrl/Cmd + '+'/'-'/'0', the same shortcuts browsers and VS Code use. preventDefault
+// stops the browser's OWN native page zoom from also kicking in and doubling up.
+window.addEventListener('keydown', e => {
+  if (!(e.ctrlKey || e.metaKey)) return;
+  if (e.key === '=' || e.key === '+') { e.preventDefault(); zoomIn(); }
+  else if (e.key === '-' || e.key === '_') { e.preventDefault(); zoomOut(); }
+  else if (e.key === '0') { e.preventDefault(); zoomReset(); }
+});
+
+try {
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (themePref === 'system') applyTheme('system'); });
+} catch (e) { /* matchMedia change listener unsupported - System theme just won't live-update, no functional loss otherwise */ }
+
+// Markdown preview ("md code runner"): README.md (and any .md file) is read-only, but
+// instead of just showing raw Markdown source in the code editor, students see it
+// rendered - headings, lists, tables, code blocks - the same way it would look on
+// GitHub. A small "View source" toggle lets them peek at the raw Markdown underneath
+// if they want to, without ever being able to edit it.
+//
+// Rendering is done with two small, well-known libraries loaded lazily from a CDN,
+// only the first time a student actually opens a .md file (same lazy-load pattern as
+// the PHP formatter): marked (https://marked.js.org) turns Markdown into HTML, and
+// DOMPurify (https://github.com/cure53/DOMPurify) sanitizes that HTML before it's
+// ever inserted into the page - important since Markdown can contain raw HTML, and a
+// student-created .md file is still untrusted input.
+const MARKED_JS = 'https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js';
+const DOMPURIFY_JS = 'https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js';
+
+function loadMdScript(src) {
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = src; s.onload = () => resolve(); s.onerror = () => reject(new Error('Could not load ' + src));
+    document.head.appendChild(s);
+  });
+}
+let markdownLibsReady = null;
+function ensureMarkdownLibs() {
+  if (!markdownLibsReady) {
+    markdownLibsReady = (async () => {
+      if (!window.marked) await loadMdScript(MARKED_JS);
+      if (!window.DOMPurify) await loadMdScript(DOMPURIFY_JS);
+    })();
+  }
+  return markdownLibsReady;
+}
+
+let mdMode = 'preview'; // 'preview' | 'source' - only meaningful while a .md file is open
+const isMdFile = name => /\.md$/i.test(name);
+
+async function renderMdPreview(src) {
+  const el = $('mdPreview');
+  el.innerHTML = '<p class="mdLoading">Loading preview…</p>';
+  try {
+    await ensureMarkdownLibs();
+    // Only render the doc that's still current by the time the library finishes
+    // loading - the student may have already clicked to a different file.
+    if (cm.getValue() !== src) return;
+    const raw = marked.parse(src, { breaks: true });
+    el.innerHTML = DOMPurify.sanitize(raw, { ADD_ATTR: ['target'] });
+  } catch (e) {
+    // Never leave the panel blank - fall back to plain preformatted text.
+    const pre = document.createElement('pre');
+    pre.className = 'mdFallback'; pre.textContent = src;
+    el.innerHTML = ''; el.appendChild(pre);
+  }
+}
+
+// Switches the editor pane between the rendered Markdown view and the raw
+// CodeMirror source view for the file that's currently open.
+function setMdMode(mode) {
+  mdMode = mode;
+  const showingSource = mode === 'source';
+  cm.getWrapperElement().style.display = showingSource ? '' : 'none';
+  $('mdPreview').hidden = showingSource;
+  $('mdToggle').textContent = showingSource ? 'Back to preview' : 'View source';
+  $('mdToggle').setAttribute('aria-pressed', String(showingSource));
+  if (showingSource) { cm.refresh(); }
+}
+
+// Called from filesystem.js's showFile() every time the open file changes - decides
+// whether to show the ordinary code editor or the Markdown preview UI.
+function applyFileView(name) {
+  const md = isMdFile(name);
+  $('mdBar').hidden = !md;
+  if (md) {
+    // The "Read-only" note only applies to a provided file like README.md - a student
+    // can also create their own .md notes file, which stays fully editable, including
+    // from the "View source" side of this same toggle.
+    $('mdNote').textContent = metaOf(name).editable ? 'Editable' : 'Read-only';
+    setMdMode('preview');
+    renderMdPreview(cm.getValue());
+  } else {
+    cm.getWrapperElement().style.display = '';
+    $('mdPreview').hidden = true;
+    cm.refresh();
+  }
+}
+
+$('mdToggle').onclick = () => {
+  if (!isMdFile(cur)) return;
+  setMdMode(mdMode === 'preview' ? 'source' : 'preview');
+  if (mdMode === 'preview') renderMdPreview(cm.getValue()); else cm.focus();
 };
 
 const b64 = s => btoa(unescape(encodeURIComponent(s)));
@@ -979,6 +1451,21 @@ const BRIDGE = '<script>document.addEventListener("submit",function(e){e.prevent
   'parent.postMessage({fp:1,m:(f.getAttribute("method")||"get").toLowerCase(),d:d},"*")},true);' +
   'document.addEventListener("click",function(e){var a=e.target.closest&&e.target.closest("a[href]");' +
   'if(a&&a.getAttribute("href").charAt(0)!=="#")e.preventDefault()},true)<\/script>';
+
+// The Preview iframe (#frame) is its own separate document, so the page-wide zoom
+// control (theme.js) - which scales the rest of the UI via CSS `zoom` on <body> - has
+// no effect on what's rendered inside it; an ancestor's `zoom` does not cross into an
+// iframe's own document. Without this, zooming in for readability would leave the
+// live PHP page preview stuck at 100%, the one part of the screen that didn't grow.
+// zoomPct is theme.js's global (loaded before this file) - default to 100% if it's
+// somehow unavailable, so a preview is never silently skipped.
+function injectZoomStyle(html, scale) {
+  if (scale === 1) return html;
+  const tag = '<style>html{zoom:' + scale + '}</style>';
+  if (/<head[^>]*>/i.test(html)) return html.replace(/<head[^>]*>/i, m => m + tag);
+  if (/<html[^>]*>/i.test(html)) return html.replace(/<html[^>]*>/i, m => m + tag);
+  return tag + html; // a fragment with no <html>/<head> tag - a stray <style> still applies
+}
 
 function inline(html) {
   allNames().forEach(name => {
@@ -1046,7 +1533,8 @@ async function run() {
   $('out').innerHTML = (flagged ? '<span class="e">' + esc(text) + (errs ? '\n' + esc(errs) : '') + '</span>' : esc(text)) ||
     '<span class="m">(no output)</span>';
   if (q.preview) {
-    $('frame').srcdoc = inline(text) + BRIDGE;
+    const previewScale = (typeof zoomPct !== 'undefined' ? zoomPct : 100) / 100;
+    $('frame').srcdoc = injectZoomStyle(inline(text) + BRIDGE, previewScale);
     view(flagged ? 'out' : 'prev');
   }
   engineBusy = false; btn.disabled = false; btn.textContent = 'Run (Ctrl+Enter)'; tbtn.disabled = !QUESTIONS[key].tests?.length;
@@ -1072,10 +1560,11 @@ async function runOneTest(t) {
   await phpReady;
   if (!PhpWeb) return { ok: false, actual: null, diag: 'The PHP engine could not be loaded.' };
   try {
+    sinkText = ''; sinkErrs = ''; // reset before anything can throw, so a failed getPhp()/mkdir/writeFile
+                                   // never leaves a PREVIOUS run's leftover output sitting in the sinks
     const engine = await getPhp();
     for (const d of allFolders()) { try { await engine.mkdir('/' + d); } catch (e) {} }
     for (const n of allNames()) await engine.writeFile('/' + n, n.endsWith('.php') ? fix(docs[n].getValue()) : docs[n].getValue());
-    sinkText = ''; sinkErrs = '';
     await engine.run(wrap(docs[main].getValue(), '', { m: 'post', d: t.input }));
   } catch (err) {
     sinkErrs += String(err && err.message || err);
