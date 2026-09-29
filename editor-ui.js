@@ -107,8 +107,8 @@ function renderTabs() {
   $('run').title = 'Runs ' + mainName + ' (Ctrl+Enter)';
 }
 function view(v) {
-  $('vPrev').className = v === 'prev' ? 'on' : ''; $('vOut').className = v === 'out' ? 'on' : ''; $('vTests').className = v === 'tests' ? 'on' : '';
-  $('frame').hidden = v !== 'prev'; $('out').hidden = v !== 'out'; $('testPanel').hidden = v !== 'tests';
+  $('vPrev').className = v === 'prev' ? 'on' : ''; $('vOut').className = v === 'out' ? 'on' : ''; $('vTests').className = v === 'tests' ? 'on' : ''; $('vDebug').className = v === 'debug' ? 'on' : '';
+  $('frame').hidden = v !== 'prev'; $('out').hidden = v !== 'out'; $('testPanel').hidden = v !== 'tests'; $('debugPanel').hidden = v !== 'debug';
 }
 function renderFuncs(list) {
   $('funcsPanel').innerHTML = list.map(f =>
@@ -135,8 +135,11 @@ function loadQuestion() {
   $('stdinbox').hidden = q.stdin === undefined;
   $('stdin').value = load('stdin:' + key) ?? (q.stdin || '');
   $('vPrev').hidden = !q.preview;
+  // The Hints accordion itself (not just its panel) stays hidden until the student
+  // actually clicks "Show hint" in the status bar - so a question with hints available
+  // doesn't display an empty-looking "Hints" box before anyone has asked for one.
   shown = 0; $('hints').innerHTML = ''; $('hints').hidden = true;
-  $('hintsSection').hidden = !q.hints?.length;
+  $('hintsSection').hidden = true;
   $('hintsToggle').setAttribute('aria-expanded', 'false');
   $('hintsToggleLabel').textContent = 'Hints';
   const hb = $('hint'); hb.hidden = !q.hints?.length; hb.disabled = false;
@@ -152,6 +155,10 @@ function loadQuestion() {
   $('funcsPanel').hidden = true; $('funcsBtn').setAttribute('aria-expanded', 'false');
   $('funcsBtnLabel').textContent = 'PHP function reference (' + funcs.length + ')';
   renderFuncs(funcs);
+  // debugger.js loads after this script, but its own first call to loadQuestion()
+  // happens later (from the page's own load, once every script has run) - so by the
+  // time a real question switch calls this, resetDebugState always exists.
+  if (typeof resetDebugState === 'function') resetDebugState();
   view(q.preview ? 'prev' : 'out');
   req = { m: 'get', d: {} };
 }
@@ -240,8 +247,9 @@ $('hint').onclick = () => {
   const p = document.createElement('p');
   p.textContent = 'Hint ' + (shown + 1) + ': ' + h[shown++];
   $('hints').appendChild(p);
-  // Revealing a hint always opens the accordion so the student can see what
-  // was just added, even if they'd previously collapsed it.
+  // The accordion itself only appears once a hint has actually been requested -
+  // and revealing a hint always opens it, even if it had been collapsed before.
+  $('hintsSection').hidden = false;
   $('hints').hidden = false;
   $('hintsToggle').setAttribute('aria-expanded', 'true');
   $('hintsToggleLabel').textContent = 'Hints (' + shown + ' of ' + h.length + ')';

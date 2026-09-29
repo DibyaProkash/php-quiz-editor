@@ -26,6 +26,7 @@
 <header>
   <h1 id="title">PHP Editor</h1>
   <select id="picker" aria-label="Question" hidden></select>
+  <button id="debug" class="debugBtn" title="Run and step through your code line by line"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="9" r="4.5"/><path d="M8 4.5V3M5 5.5 3.8 4.2M11 5.5l1.2-1.3M3 9H1M15 9h-2M3.3 12.8 4.8 11.4M12.7 12.8l-1.5-1.4" stroke-linecap="round"/></svg> Debug</button>
   <button id="run">Run (Ctrl+Enter)</button>
 </header>
 <main>
@@ -42,6 +43,7 @@
       <button id="vPrev" class="on">Preview</button>
       <button id="vOut">Output</button>
       <button id="vTests" hidden>Tests</button>
+      <button id="vDebug">Debugger</button>
     </div>
     <iframe id="frame" title="Page preview" sandbox="allow-scripts allow-forms"></iframe>
     <pre id="out" hidden aria-live="polite"></pre>
@@ -49,6 +51,23 @@
       <button id="runTests">Run tests</button>
       <p class="testNote">Runs your current code through the real PHP interpreter with each set of inputs below, and compares the "Final amount" it produces against the expected answer.</p>
       <div id="testResults" aria-live="polite"></div>
+    </div>
+    <div id="debugPanel" hidden>
+      <p class="testNote">Runs your code once, recording every executed line in <strong id="dbgFileName"></strong> along with its variables at that point - then lets you step through that recording. (It can't pause a running program the way a desktop debugger can; this replays what already happened, line by line.)</p>
+      <div id="dbgError" hidden></div>
+      <div id="dbgEmpty" class="testNote">Click <strong>Debug</strong> above to run your code and step through it.</div>
+      <div id="dbgBody" hidden>
+        <div class="dbgToolbar">
+          <button id="dbgFirst" class="sbBtn" title="First step" aria-label="First step">&#8676;</button>
+          <button id="dbgPrev" class="sbBtn" title="Step back" aria-label="Step back">&#9664;</button>
+          <input id="dbgSlider" type="range" min="0" max="0" value="0" aria-label="Debug step">
+          <button id="dbgNext" class="sbBtn" title="Step forward" aria-label="Step forward">&#9654;</button>
+          <button id="dbgLast" class="sbBtn" title="Last step" aria-label="Last step">&#8677;</button>
+        </div>
+        <div class="dbgStatus"><span id="dbgStepLabel"></span><span id="dbgLineInfo"></span></div>
+        <h2>Variables at this step</h2>
+        <div id="dbgVars"></div>
+      </div>
     </div>
     <div id="stdinbox" hidden><h2>Input (one value per line)</h2><textarea id="stdin" spellcheck="false" aria-label="Program input"></textarea></div>
     <div id="hintsSection" class="accordionSection" hidden>
@@ -88,11 +107,11 @@
     </div>
     <label class="sbLabel">Theme
       <select id="themePicker" aria-label="Theme">
-        <option value="system">System</option>
-        <option value="dark">Dark</option>
-        <option value="light">Light</option>
-        <option value="high-contrast">High contrast</option>
-        <option value="solarized">Solarized dark</option>
+        <option value="system">&#128421;&#65039; System</option>
+        <option value="dark">&#127769; Dark</option>
+        <option value="light">&#9728;&#65039; Light</option>
+        <option value="high-contrast">&#9680; High contrast</option>
+        <option value="solarized">&#127749; Solarized dark</option>
       </select>
     </label>
   </div>
@@ -125,6 +144,7 @@
 <script src="markdown.js"></script>
 <script src="php-runner.js"></script>
 <script src="tests.js"></script>
+<script src="debugger.js"></script>
 <script src="php-intellisense.js"></script>
 <script src="php-format.js"></script>
 </body>

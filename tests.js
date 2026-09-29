@@ -48,13 +48,13 @@ function renderTestResults(rows) {
 }
 
 async function runTests() {
-  const q = QUESTIONS[key], runBtn = $('run'), testBtn = $('runTests');
+  const q = QUESTIONS[key], runBtn = $('run'), testBtn = $('runTests'), dbtn = $('debug');
   if (engineBusy || !q.tests?.length) return;
-  engineBusy = true; runBtn.disabled = true; testBtn.disabled = true; testBtn.innerHTML = TEST_SPIN + ' Running tests…';
+  engineBusy = true; runBtn.disabled = true; testBtn.disabled = true; dbtn.disabled = true; testBtn.innerHTML = TEST_SPIN + ' Running tests…';
   $('testResults').innerHTML = '<p class="testRunning">' + TEST_SPIN + ' Running ' + q.tests.length + ' test(s) against your code…</p>';
   const rows = [];
   for (const t of q.tests) rows.push({ t, r: await runOneTest(t) });
   renderTestResults(rows);
-  engineBusy = false; runBtn.disabled = false; testBtn.disabled = false; testBtn.innerHTML = BEAKER + ' Run tests (' + q.tests.length + ')';
+  engineBusy = false; runBtn.disabled = false; testBtn.disabled = false; dbtn.disabled = false; testBtn.innerHTML = BEAKER + ' Run tests (' + q.tests.length + ')';
 }
 $('runTests').onclick = runTests;

@@ -40,7 +40,7 @@
 
 *{box-sizing:border-box}
 html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font:14px system-ui,-apple-system,"Segoe UI",sans-serif}
-body{display:flex;flex-direction:column;zoom:var(--ui-scale)}
+body{display:flex;flex-direction:column}
 
 /* Skip link: invisible until focused, then jumps a keyboard user straight to the
    code editor without tabbing through the whole file explorer every time. */
@@ -83,7 +83,30 @@ button:focus-visible,select:focus-visible,textarea:focus-visible,[tabindex]:focu
 :root[data-theme="high-contrast"] button:focus-visible,:root[data-theme="high-contrast"] select:focus-visible,:root[data-theme="high-contrast"] textarea:focus-visible,:root[data-theme="high-contrast"] [tabindex]:focus-visible,:root[data-theme="high-contrast"] a:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 #run{background:var(--accent);border-color:var(--accent);color:var(--accent-contrast);font-weight:600}
 #run:disabled{opacity:.6;cursor:wait}
-main{flex:1;display:grid;grid-template-columns:210px 1fr 1fr;min-height:0}
+.debugBtn{display:inline-flex;align-items:center;gap:6px;color:var(--muted)}
+.debugBtn:disabled{opacity:.6;cursor:wait}
+
+/* Debugger panel */
+.dbgToolbar{display:flex;align-items:center;gap:6px;margin:0 0 8px}
+.dbgToolbar .sbBtn{border:1px solid var(--line);border-radius:4px;color:var(--text);background:var(--input-bg);padding:4px 9px}
+.dbgToolbar .sbBtn:hover:not(:disabled){background:var(--hover-bg)}
+.dbgToolbar .sbBtn:disabled{opacity:.4;cursor:default}
+#dbgSlider{flex:1;accent-color:var(--accent)}
+.dbgStatus{display:flex;justify-content:space-between;color:var(--muted);font-size:12.5px;margin:0 0 14px}
+#dbgVars{display:flex;flex-direction:column;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.dbgVarRow{display:flex;justify-content:space-between;gap:12px;background:var(--panel2);padding:6px 10px;font-size:12.5px}
+.dbgVarName{color:var(--accent);font-family:ui-monospace,Menlo,Consolas,monospace;flex:none}
+.dbgVarVal{color:var(--text);font-family:ui-monospace,Menlo,Consolas,monospace;overflow-wrap:anywhere;text-align:right}
+#dbgError{margin-bottom:14px}
+#dbgError .e{white-space:pre-wrap;word-break:break-word;font:13px ui-monospace,Menlo,Consolas,monospace;color:var(--err)}
+#dbgEmpty{color:var(--muted)}
+/* The line the debugger is currently stopped on, highlighted in the code editor. */
+.dbgLine{background:rgba(var(--ok-rgb),.18)}
+/* Zoom is applied here, not on <body>, so it only scales the file explorer,
+   code editor and preview/output panels - the header (Run button) and the
+   bottom status bar (theme/zoom controls themselves) stay a fixed size and
+   don't drift out of reach as a student zooms in further. */
+main{flex:1;display:grid;grid-template-columns:210px 1fr 1fr;min-height:0;zoom:var(--ui-scale)}
 .editor,.side{min-width:0;min-height:0;display:flex;flex-direction:column}
 .editor{border-right:1px solid var(--line)}
 .bar{display:flex;background:var(--panel);border-bottom:1px solid var(--line);min-height:33px;align-items:stretch}
@@ -98,7 +121,8 @@ main{flex:1;display:grid;grid-template-columns:210px 1fr 1fr;min-height:0}
 #stdinbox h2{margin:0;padding:6px 14px;font-size:13px;font-weight:500;color:var(--muted);background:var(--panel)}
 #stdin{display:block;height:90px;resize:vertical;width:100%;background:var(--bg);color:var(--text);border:0;padding:10px 14px;font:14px ui-monospace,Menlo,Consolas,monospace}
 #hints p{margin:0 0 8px}
-#testPanel{flex:1;overflow:auto;padding:12px 14px}
+#testPanel,#debugPanel{flex:1;overflow:auto;padding:12px 14px}
+#debugPanel h2{margin:0 0 8px;font-size:13px;font-weight:600;color:var(--muted)}
 #testPanel .testNote{margin:8px 0 14px;color:var(--muted);font-size:12.5px;line-height:1.5}
 #runTests{display:inline-flex;align-items:center;gap:7px}
 .testRunning{display:flex;align-items:center;gap:9px;color:var(--muted);font-size:13px;margin:0 0 4px}
@@ -137,7 +161,6 @@ main{flex:1;display:grid;grid-template-columns:210px 1fr 1fr;min-height:0}
 .accordionBtn .chev{flex:none;transition:transform .15s ease}
 .accordionBtn[aria-expanded="true"] .chev{transform:rotate(-180deg)}
 .accordionPanel{padding:6px 14px 10px;max-height:240px;overflow:auto;background:var(--panel2)}
-#hints.accordionPanel{max-height:30%}
 .funcItem{padding:8px 0;border-top:1px solid var(--line)}
 .funcItem:first-child{border-top:0}
 .funcSig{display:block;color:var(--accent);font-size:12.5px;margin-bottom:3px;word-break:break-word}

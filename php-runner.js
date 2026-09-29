@@ -76,9 +76,9 @@ async function getPhp() {
 let engineBusy = false;
 
 async function run() {
-  const btn = $('run'), tbtn = $('runTests'), q = QUESTIONS[key];
+  const btn = $('run'), tbtn = $('runTests'), dbtn = $('debug'), q = QUESTIONS[key];
   if (engineBusy) return;
-  engineBusy = true; btn.disabled = true; btn.textContent = 'Running…'; tbtn.disabled = true;
+  engineBusy = true; btn.disabled = true; btn.textContent = 'Running…'; tbtn.disabled = true; dbtn.disabled = true;
   sinkText = ''; sinkErrs = '';
   try {
     const main = mainName;
@@ -101,7 +101,7 @@ async function run() {
     $('frame').srcdoc = injectZoomStyle(inline(text) + BRIDGE, previewScale);
     view(flagged ? 'out' : 'prev');
   }
-  engineBusy = false; btn.disabled = false; btn.textContent = 'Run (Ctrl+Enter)'; tbtn.disabled = !QUESTIONS[key].tests?.length;
+  engineBusy = false; btn.disabled = false; btn.textContent = 'Run (Ctrl+Enter)'; tbtn.disabled = !QUESTIONS[key].tests?.length; dbtn.disabled = false;
 }
 function runFresh() { req = { m: 'get', d: {} }; run(); }
 
