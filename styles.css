@@ -447,6 +447,57 @@ main {
   color: var(--muted);
   font-size: 12px;
 }
+#vConsole {
+  position: relative;
+}
+.consoleBadge {
+  display: inline-block;
+  margin-left: 5px;
+  min-width: 15px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--err);
+  color: #fff;
+  font-size: 10.5px;
+  line-height: 15px;
+  text-align: center;
+}
+#navNote {
+  margin-left: auto;
+  align-self: center;
+  padding: 0 12px;
+  color: var(--muted);
+  font-size: 12px;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+}
+.consoleEntry {
+  display: flex;
+  gap: 6px;
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--line);
+  font:
+    12.5px/1.5 ui-monospace,
+    Menlo,
+    Consolas,
+    monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.consoleEntry-log,
+.consoleEntry-info {
+  color: var(--text);
+}
+.consoleEntry-warn {
+  color: #d9a63e;
+  background: rgba(217, 166, 62, 0.08);
+}
+.consoleEntry-error {
+  color: var(--err);
+  background: rgba(var(--err-rgb), 0.08);
+}
+.consoleIcon {
+  flex: none;
+}
 .CodeMirror {
   flex: 1;
   height: auto;
@@ -511,7 +562,8 @@ main {
   margin: 0 0 8px;
 }
 #testPanel,
-#debugPanel {
+#debugPanel,
+#consolePanel {
   flex: 1;
   overflow: auto;
   padding: 12px 14px;
@@ -522,7 +574,7 @@ main {
   font-weight: 600;
   color: var(--muted);
 }
-#testPanel .testNote {
+.testNote {
   margin: 8px 0 14px;
   color: var(--muted);
   font-size: 12.5px;
@@ -945,6 +997,12 @@ li.CodeMirror-hint-active.cm-hint-kw,
 li.CodeMirror-hint-active.cm-hint-fn,
 li.CodeMirror-hint-active.cm-hint-var {
   color: var(--accent-contrast);
+}
+
+/* matchTags (editor-ui.js) highlights the opening/closing pair of whichever HTML tag the
+   cursor is in, in .html/.htmlmixed files - otherwise invisible without this rule. */
+.cm-matchingtag {
+  background: rgba(79, 140, 255, 0.25);
 }
 .cm-hint-row {
   display: flex;

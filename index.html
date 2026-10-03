@@ -202,6 +202,10 @@
           <button id="vOut">Output</button>
           <button id="vTests" hidden>Tests</button>
           <button id="vDebug">Debugger</button>
+          <button id="vConsole">
+            Console<span id="consoleBadge" class="consoleBadge" hidden>0</span>
+          </button>
+          <span id="navNote" hidden></span>
         </div>
         <iframe
           id="frame"
@@ -217,6 +221,18 @@
             against the expected answer.
           </p>
           <div id="testResults" aria-live="polite"></div>
+        </div>
+        <div id="consolePanel" hidden>
+          <p class="testNote">
+            JS console output and uncaught errors from the page currently shown
+            in Preview - cleared each time you click Run. Clicking a link in
+            Preview that points at another file in your project loads that file
+            here too, instead of being blocked.
+          </p>
+          <div id="consoleEmpty" class="testNote">
+            No console messages yet for this run.
+          </div>
+          <div id="consoleList" aria-live="polite"></div>
         </div>
         <div id="debugPanel" hidden>
           <p class="testNote">
@@ -431,7 +447,15 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/php/php.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closetag.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/xml-fold.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchtags.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/show-hint.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/xml-hint.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/html-hint.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/css-hint.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/javascript-hint.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/anyword-hint.min.js"></script>
 
     <script src="php-engine.js"></script>
     <script src="questions.js"></script>
@@ -443,6 +467,7 @@
     <script src="php-runner.js"></script>
     <script src="tests.js"></script>
     <script src="debugger.js"></script>
+    <script src="console.js"></script>
     <script src="php-intellisense.js"></script>
     <script src="php-format.js"></script>
   </body>

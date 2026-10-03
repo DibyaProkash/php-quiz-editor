@@ -37,11 +37,29 @@ function toggleLineComment(cmInst) {
   });
 }
 
+// Ctrl-Space's autocomplete source depends on what kind of file is open - PHP code gets
+// the custom phpHint source (php-intellisense.js), while .html/.css/.js files get
+// CodeMirror's own built-in hint sources for those languages (loaded in index.html),
+// which know about tags/attributes, CSS properties, and JS globals/keywords respectively.
+function hintForCurrentFile(cmInst) {
+  const ext = cur.split(".").pop(),
+    h = CodeMirror.hint || {};
+  if (ext === "css" && h.css) return h.css(cmInst);
+  if (ext === "js" && h.javascript) return h.javascript(cmInst);
+  if (ext === "html" && h.html) return h.html(cmInst);
+  return phpHint(cmInst);
+}
+
 const cm = CodeMirror.fromTextArea($("code"), {
   theme: "material-darker",
   lineNumbers: true,
   matchBrackets: true,
   autoCloseBrackets: true,
+  // autoCloseTags/matchTags only do anything while an HTML-flavored mode (htmlmixed) is
+  // active on the current Doc - they're silently inert for .php/.css/.js files, so it's
+  // safe to turn them on globally rather than toggling them on every file switch.
+  autoCloseTags: true,
+  matchTags: { bothTags: true },
   indentUnit: 4,
   indentWithTabs: false,
   undoDepth: 1000,
@@ -51,7 +69,7 @@ const cm = CodeMirror.fromTextArea($("code"), {
     "Cmd-Enter": () => runFresh(),
     Tab: (c) => c.replaceSelection("    "),
     "Ctrl-Space": (c) =>
-      CodeMirror.showHint(c, phpHint, { completeSingle: false }),
+      CodeMirror.showHint(c, hintForCurrentFile, { completeSingle: false }),
     "Shift-Alt-F": () => formatCurrentFile(),
     "Ctrl-/": toggleLineComment,
     "Cmd-/": toggleLineComment,
@@ -243,10 +261,12 @@ function view(v) {
   $("vOut").className = v === "out" ? "on" : "";
   $("vTests").className = v === "tests" ? "on" : "";
   $("vDebug").className = v === "debug" ? "on" : "";
+  $("vConsole").className = v === "console" ? "on" : "";
   $("frame").hidden = v !== "prev";
   $("out").hidden = v !== "out";
   $("testPanel").hidden = v !== "tests";
   $("debugPanel").hidden = v !== "debug";
+  $("consolePanel").hidden = v !== "console";
 }
 function renderFuncs(list) {
   $("funcsPanel").innerHTML = list
@@ -339,8 +359,15 @@ function loadQuestion() {
   // happens later (from the page's own load, once every script has run) - so by the
   // time a real question switch calls this, resetDebugState always exists.
   if (typeof resetDebugState === "function") resetDebugState();
+  // console.js loads after this script too, for the same reason as resetDebugState above.
+  if (typeof resetConsolePanel === "function") resetConsolePanel();
   view(q.preview ? "prev" : "out");
   req = { m: "get", d: {} };
+  // previewTarget (php-runner.js) names a sub-page Preview navigated to via a clicked
+  // link - a question switch should always land back on that question's own main file.
+  if (typeof previewTarget !== "undefined") previewTarget = "";
+  const nn = $("navNote");
+  if (nn) nn.hidden = true;
 }
 
 if (!params.get("q")) {
@@ -380,6 +407,7 @@ $("stdin").addEventListener("input", (e) => {
 $("vPrev").onclick = () => view("prev");
 $("vOut").onclick = () => view("out");
 $("vTests").onclick = () => view("tests");
+$("vConsole").onclick = () => view("console");
 $("funcsBtn").onclick = () => {
   const opening = $("funcsPanel").hidden;
   $("funcsPanel").hidden = !opening;

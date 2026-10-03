@@ -13,7 +13,45 @@
                Adds a "Tests" tab where students can run these themselves. Omit to hide it.
    functions : optional array of { sig, desc, example } shown in a collapsible
                "PHP function reference" panel. Omit to hide that panel.
+   sql       : optional, default false. Set true to give this question a real PDO
+               connection to a real (WASM) Postgres database, via `new PDO('pgsql:')` -
+               genuine SQL, not a simulation. The database is in-memory and brand new on
+               every Run/Debug/Tests click, so a SQL question's own code should create and
+               seed whatever tables it needs each time, rather than assuming yesterday's
+               data (or even the previous click's data) is still there.
 ------------------------------------------------------------------- */
+
+// PDO methods worth knowing for a question that uses `sql: true`.
+const PDO_FUNCS = [
+  {
+    sig: "new PDO(string $dsn): PDO",
+    desc: 'Opens a database connection. This editor\'s SQL questions always use the DSN "pgsql:" - a fresh, empty, in-memory Postgres database for this run only.',
+    example: "$pdo = new PDO('pgsql:');",
+  },
+  {
+    sig: "PDO::exec(string $sql): int|false",
+    desc: "Runs a SQL statement that does not return rows (CREATE TABLE, INSERT, UPDATE, DELETE) and returns the number of affected rows.",
+    example:
+      "$pdo->exec(\"INSERT INTO students (name, grade) VALUES ('Alice', 95)\");",
+  },
+  {
+    sig: "PDO::query(string $sql): PDOStatement",
+    desc: "Runs a SQL SELECT and returns a statement you can loop over to read the rows back.",
+    example:
+      "$rows = $pdo->query(\"SELECT * FROM students ORDER BY grade DESC\");\nforeach ($rows as $row) { echo $row['name']; }",
+  },
+  {
+    sig: "PDO::prepare(string $sql): PDOStatement",
+    desc: "Prepares a SQL statement with ? or :name placeholders, so you can safely plug in values (including ones a user typed) without building the SQL string by hand.",
+    example:
+      '$stmt = $pdo->prepare("INSERT INTO students (name, grade) VALUES (?, ?)");\n$stmt->execute([$name, $grade]);',
+  },
+  {
+    sig: "PDOStatement::fetchAll(): array",
+    desc: "Reads every remaining row from a statement at once, as an array of associative arrays.",
+    example: "$pdo->query('SELECT * FROM students')->fetchAll();",
+  },
+];
 
 // The 3 official test cases for the Café Order Calculator (same math in all 3 parts).
 const CAFE_TESTS = [
@@ -540,6 +578,118 @@ button{margin-top:6px;padding:8px 16px;background:#4a3f8c;color:#fff;border:0;bo
         code: `document.querySelectorAll('input[type=number]').forEach(function (el) {
   el.addEventListener('focus', function () { el.select(); });
 });
+`,
+      },
+    ],
+  },
+  sql1: {
+    title: "Bonus – Student Directory (SQL)",
+    preview: true,
+    sql: true,
+    functions: PDO_FUNCS,
+    hints: [
+      "Connect first: $pdo = new PDO('pgsql:'); - do this before anything else.",
+      "CREATE TABLE students (id SERIAL PRIMARY KEY, name TEXT, grade INT) sets up the table. Run it with $pdo->exec(...).",
+      'Add the submitted name/grade with a prepared statement: $stmt = $pdo->prepare("INSERT INTO students (name, grade) VALUES (?, ?)"); $stmt->execute([$name, $grade]);',
+      'Read everything back sorted highest-first: $pdo->query("SELECT * FROM students ORDER BY grade DESC")->fetchAll().',
+    ],
+    files: [
+      {
+        name: "README.md",
+        editable: false,
+        code: `# Bonus – Student Directory (SQL)
+
+## Goal
+Build a tiny web app with a **real database behind it** - the same PDO API you'd use talking to a real MySQL/Postgres server on a real website, except here it's a genuine Postgres engine running entirely inside your browser tab via WebAssembly. No server, no setup - but it's not a simulation either: it's really parsing and running your SQL.
+
+## The one thing that's different from a real website
+On a real website, the database keeps its data between page requests. Here, every time you click **Run** (or **Tests**/**Debug**), you get a **brand new, empty database** - exactly like every other piece of PHP state in this editor resets between clicks. So your script needs to create its table and insert the submitted row *every single run*, rather than assuming earlier data is still sitting there. That's why the code below creates the table and re-inserts a couple of starter rows each time, then adds whatever the form submitted on top.
+
+## What to build
+1. Connect: \`$pdo = new PDO('pgsql:');\`
+2. Create the \`students\` table (see the TODO in index.php) and insert the two starter rows provided.
+3. If the form was submitted, insert the new name/grade using a **prepared statement** (never build SQL by concatenating a variable directly into the string).
+4. Query all students back out, sorted by grade, highest first, and loop over them to fill in the table rows.
+
+## Files in this project
+| File | Can I edit it? |
+|---|---|
+| \`index.php\` | ✅ Yes - this is the only file you need to change |
+| \`style.css\` | 🔒 Read-only - provided styling |
+| \`README.md\` | 🔒 Read-only - this file |
+`,
+      },
+      {
+        name: "index.php",
+        editable: true,
+        code: `<?php
+// Bonus - Student Directory, backed by a real (in-browser) Postgres database.
+
+$pdo = new PDO('pgsql:');
+
+// TODO: create the students table.
+// $pdo->exec("CREATE TABLE students (id SERIAL PRIMARY KEY, name TEXT, grade INT)");
+
+// Starter rows, re-added every run since the database is empty each time.
+// TODO: insert these two rows (one exec() call per row, or loop + a prepared statement).
+// $pdo->exec("INSERT INTO students (name, grade) VALUES ('Alice', 95)");
+// $pdo->exec("INSERT INTO students (name, grade) VALUES ('Bob', 88)");
+
+$submitted = $_SERVER['REQUEST_METHOD'] === 'POST';
+
+if ($submitted) {
+    $name = $_POST['name'] ?? '';
+    $grade = (int) ($_POST['grade'] ?? 0);
+    if ($name !== '') {
+        // TODO: insert $name/$grade using a prepared statement - never put $name
+        // directly into a SQL string, even though this is only a browser demo.
+        // $stmt = $pdo->prepare("INSERT INTO students (name, grade) VALUES (?, ?)");
+        // $stmt->execute([$name, $grade]);
+    }
+}
+
+// TODO: fetch every student, ordered by grade descending, into $students.
+$students = [];
+// $students = $pdo->query("SELECT * FROM students ORDER BY grade DESC")->fetchAll();
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Student Directory</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="card">
+    <h1>Student Directory</h1>
+    <form method="post">
+      <label>Name <input type="text" name="name" required></label>
+      <label>Grade <input type="number" name="grade" min="0" max="100" value="0"></label>
+      <button type="submit">Add student</button>
+    </form>
+    <table class="roster">
+      <tr><th>Name</th><th>Grade</th></tr>
+      <?php foreach ($students as $s): ?>
+      <tr><td><?php echo htmlspecialchars($s['name']); ?></td><td><?php echo (int) $s['grade']; ?></td></tr>
+      <?php endforeach; ?>
+    </table>
+  </main>
+</body>
+</html>
+`,
+      },
+      {
+        name: "style.css",
+        editable: false,
+        code: `body{font-family:system-ui,sans-serif;background:#f0eef7;margin:0;padding:24px;color:#2b2740}
+.card{max-width:440px;margin:0 auto;background:#fff;padding:24px;border-radius:8px;border:1px solid #ddd8ee}
+h1{margin:0 0 16px;font-size:21px}
+label{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+input{width:120px;padding:6px}
+button{margin-top:6px;padding:8px 16px;background:#4a3f8c;color:#fff;border:0;border-radius:4px;cursor:pointer}
+.roster{width:100%;margin-top:20px;border-collapse:collapse}
+.roster th{text-align:left;color:#655f80;font-weight:600;border-bottom:2px solid #ddd8ee;padding:6px 0}
+.roster td{padding:6px 0;border-bottom:1px solid #ede9f7}
 `,
       },
     ],

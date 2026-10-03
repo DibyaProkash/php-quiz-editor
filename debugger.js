@@ -88,8 +88,8 @@ function wrapDebug(instrumentedCode, stdin, r) {
 
 // Tokenizing is itself a PHP run through the same shared engine - see getPhp() in
 // php-runner.js - so it takes its turn behind the engineBusy lock like Run/Tests do.
-async function instrumentSource(src) {
-  const engine = await getPhp();
+async function instrumentSource(src, needsSql) {
+  const engine = await getPhp(needsSql);
   await engine.writeFile("/__dbgsrc.php", src);
   sinkText = "";
   sinkErrs = "";
@@ -262,7 +262,8 @@ async function runDebug() {
   testBtn.disabled = true;
   view("debug");
   try {
-    const main = mainName;
+    const main = mainName,
+      q = QUESTIONS[key];
     await phpReady;
     if (!PhpWeb)
       throw new Error(
@@ -270,10 +271,13 @@ async function runDebug() {
           (window.__phpErr || "unknown error") +
           ").",
       );
-    const instrumented = await instrumentSource(fix(docs[main].getValue()));
+    const instrumented = await instrumentSource(
+      fix(docs[main].getValue()),
+      q.sql,
+    );
     sinkText = "";
     sinkErrs = "";
-    const engine = await getPhp();
+    const engine = await getPhp(q.sql);
     for (const d of allFolders()) {
       try {
         await engine.mkdir("/" + d);
