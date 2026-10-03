@@ -2482,6 +2482,284 @@ button{margin-top:6px;padding:8px 16px;background:#4a3f8c;color:#fff;border:0;bo
         },
       };
 
+      /* ------------------------------------------------------------------
+   TEMPLATED QUESTIONS
+
+   A question above is fully hand-written - every number in it was typed in by hand, and
+   so is every related "answer key" number in its tests. A question defined here instead
+   has a `params` block (values with a min/max and how many decimals to round to) and uses
+   {{paramName}} placeholders anywhere in its title/hints/files/functions text; a `tests`
+   entry's `expectFinal` is a function of those params instead of a fixed string. The point
+   isn't to vary per student - every student sees the exact same resolved numbers, just
+   like every other question here, which is what keeps grading fair between students. The
+   point is to make a NEW question (or a differently-numbered variant of one, for a
+   different exam/quiz sitting) fast to generate - the min/max ranges and the formulas in
+   `expectFinal` only have to be written once, and asking Claude to add or re-roll one from
+   here on is a quick conversation rather than hand-editing a wall of PHP and recomputing
+   every expected test answer by hand.
+
+   TEMPLATE_SEED is a single fixed number, baked into the build, shared by every student -
+   not randomized per browser session. Every student who opens a question defined here
+   gets the IDENTICAL resolved numbers, every time, the same as a hand-written question.
+   To get a differently-numbered variant for a different exam/quiz (not for different
+   students within the same one), change this to a different fixed number and rebuild -
+   that new number is still shared by everyone sitting THAT exam.
+
+   Add a new question by copying an existing entry below (or asking Claude to write one) -
+   once it's added to QUESTION_TEMPLATES, it's automatically resolved and merged into
+   QUESTIONS under its own key, indistinguishable from a hand-written question to the rest
+   of the app.
+------------------------------------------------------------------- */
+
+      const TEMPLATE_SEED = 1; // bump to a different fixed number to re-roll a new, still-fixed, still-fair-for-everyone variant
+      // mulberry32 - a small, fast, fully deterministic PRNG from a 32-bit seed (same seed,
+      // same sequence of values, every time - unlike Math.random(), which can't be seeded).
+      function makeRng(seed) {
+        let a = seed >>> 0;
+        return function () {
+          a |= 0;
+          a = (a + 0x6d2b79f5) | 0;
+          let t = Math.imul(a ^ (a >>> 15), 1 | a);
+          t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+          return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        };
+      }
+      function randParam(rng, spec) {
+        const decimals = spec.decimals ?? 0;
+        const step = spec.step ?? (decimals ? 1 / Math.pow(10, decimals) : 1);
+        const n =
+          Math.round((spec.min + rng() * (spec.max - spec.min)) / step) * step;
+        return Number(n.toFixed(decimals));
+      }
+      function fillPlaceholders(str, params) {
+        return str.replace(/\{\{(\w+)\}\}/g, (m, k) =>
+          k in params ? String(params[k]) : m,
+        );
+      }
+      function deepFillPlaceholders(value, params) {
+        if (typeof value === "string") return fillPlaceholders(value, params);
+        if (Array.isArray(value))
+          return value.map((v) => deepFillPlaceholders(v, params));
+        if (value && typeof value === "object") {
+          const out = {};
+          for (const k in value)
+            out[k] = deepFillPlaceholders(value[k], params);
+          return out;
+        }
+        return value;
+      }
+      function resolveTemplate(tpl, rng) {
+        const params = {};
+        for (const name in tpl.params)
+          params[name] = randParam(rng, tpl.params[name]);
+        const resolved = deepFillPlaceholders(
+          {
+            title: tpl.title,
+            preview: tpl.preview,
+            sql: tpl.sql,
+            stdin: tpl.stdin,
+            functions: tpl.functions,
+            hints: tpl.hints,
+            files: tpl.files,
+          },
+          params,
+        );
+        resolved.tests = (tpl.tests || []).map((t) => ({
+          label: fillPlaceholders(t.label, params),
+          input: deepFillPlaceholders(t.input, params),
+          expectFinal: t.expectFinal(params),
+        }));
+        return resolved;
+      }
+
+      const QUESTION_TEMPLATES = {
+        movie1: {
+          title: "Bonus – Movie Night Order",
+          preview: true,
+          params: {
+            ticketPrice: { min: 8, max: 14, decimals: 2 },
+            snackPrice: { min: 3, max: 7, decimals: 2 },
+            discountThreshold: { min: 20, max: 40, step: 5, decimals: 0 },
+            discountPct: { min: 5, max: 15, step: 5, decimals: 0 },
+            taxPct: { min: 3, max: 9, decimals: 0 },
+          },
+          hints: [
+            "Ticket cost = tickets × {{ticketPrice}}. Snack cost = snacks × {{snackPrice}}. Subtotal is those two added together.",
+            "Use if ($subtotal >= {{discountThreshold}}) { ... } else { ... } to set a {{discountPct}}% discount, or $0 otherwise.",
+            "Tax is {{taxPct}}% of the subtotal after the discount is subtracted, not before.",
+            "Use number_format($value, 2) when you display each dollar amount.",
+          ],
+          files: [
+            {
+              name: "README.md",
+              editable: false,
+              code: `# Bonus – Movie Night Order
+
+## Goal
+Finish \`index.php\` so the order form correctly calculates and displays the total cost - same shape of problem as the Café parts, with a different set of numbers.
+
+## The numbers for this question
+| | |
+|---|---|
+| Ticket price | \`$ {{ticketPrice}}\` |
+| Snack price | \`$ {{snackPrice}}\` |
+| Discount | **{{discountPct}}%** once the subtotal is **$ {{discountThreshold}} or more** |
+| Tax | **{{taxPct}}%** of the subtotal after the discount |
+
+## What to build
+When the form is submitted, fill in the \`// TODO\` sections so the page calculates, in order:
+1. \`$ticketCost\` and \`$snackCost\` - each quantity times its price above.
+2. \`$subtotal\` - the two costs added together.
+3. \`$discount\` - **{{discountPct}}%** of the subtotal, but only when the subtotal is **$ {{discountThreshold}} or more**; otherwise \`$0\`.
+4. \`$tax\` - **{{taxPct}}%** of the subtotal *after* the discount has been subtracted.
+5. \`$final\` - the subtotal, minus the discount, plus the tax.
+
+Then echo each amount into its matching table cell, using \`number_format($value, 2)\`.
+
+## Testing your code
+Open the **Tests** tab and click **Run tests** - the checks use YOUR numbers above, not anyone else's.
+`,
+            },
+            {
+              name: "index.php",
+              editable: true,
+              code: `<?php
+// Bonus - Movie Night Order (generated from a template - see questions.js)
+
+$ticketPrice = {{ticketPrice}};
+$snackPrice  = {{snackPrice}};
+
+$submitted = $_SERVER['REQUEST_METHOD'] === 'POST';
+
+if ($submitted) {
+    $tickets = (int) ($_POST['tickets'] ?? 0);
+    $snacks  = (int) ($_POST['snacks'] ?? 0);
+
+    // TODO: calculate $ticketCost and $snackCost
+
+
+    // TODO: calculate $subtotal
+
+
+    // TODO: use if/else to calculate $discount ({{discountPct}}% when $subtotal is {{discountThreshold}} or more, otherwise 0)
+
+
+    // TODO: calculate $tax ({{taxPct}}% of the subtotal after the discount)
+
+
+    // TODO: calculate $final
+
+}
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Movie Night</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="card">
+    <h1>Movie Night Order</h1>
+    <form method="post">
+      <label>Tickets <input type="number" name="tickets" min="0" value="0"></label>
+      <label>Snacks <input type="number" name="snacks" min="0" value="0"></label>
+      <button type="submit">Calculate</button>
+    </form>
+    <?php if ($submitted): ?>
+    <table class="receipt">
+      <tr><th>Ticket cost</th><td>$<?php // TODO: echo the ticket cost ?></td></tr>
+      <tr><th>Snack cost</th><td>$<?php // TODO: echo the snack cost ?></td></tr>
+      <tr class="subtotal"><th>Subtotal</th><td>$<?php // TODO: echo the subtotal ?></td></tr>
+      <tr><th>Discount</th><td>$<?php // TODO: echo the discount ?></td></tr>
+      <tr><th>Tax</th><td>$<?php // TODO: echo the tax ?></td></tr>
+      <tr class="total"><th>Final amount</th><td>$<?php // TODO: echo the final amount ?></td></tr>
+    </table>
+    <?php endif; ?>
+  </main>
+</body>
+</html>
+`,
+            },
+            {
+              name: "style.css",
+              editable: false,
+              code: `body{font-family:system-ui,sans-serif;background:#eef3f8;margin:0;padding:24px;color:#20242b}
+.card{max-width:440px;margin:0 auto;background:#fff;padding:24px;border-radius:8px;border:1px solid #dbe2ea}
+h1{margin:0 0 16px;font-size:21px}
+label{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+input{width:80px;padding:6px}
+button{margin-top:6px;padding:8px 16px;background:#2f6fed;color:#fff;border:0;border-radius:4px;cursor:pointer}
+.receipt{width:100%;margin-top:20px;border-collapse:collapse}
+.receipt th{text-align:left;font-weight:400;color:#5b6472}
+.receipt td{text-align:right}
+.receipt th,.receipt td{padding:6px 0;border-bottom:1px solid #eef1f5}
+.receipt tr.subtotal th,.receipt tr.subtotal td{border-top:2px solid #dbe2ea;font-weight:600;color:#20242b}
+.receipt tr.total th,.receipt tr.total td{font-weight:700;font-size:17px;border-bottom:0}
+`,
+            },
+          ],
+          // Each expectFinal is a function of the resolved params, computed with the exact same
+          // math the student's PHP is supposed to implement - this is the "answer key" logic,
+          // kept in one place so it can never silently drift from what grading actually checks.
+          tests: [
+            {
+              label: "2 tickets, 2 snacks",
+              input: { tickets: "2", snacks: "2" },
+              expectFinal: (p) => {
+                const subtotal = p.ticketPrice * 2 + p.snackPrice * 2;
+                const discount =
+                  subtotal >= p.discountThreshold
+                    ? (subtotal * p.discountPct) / 100
+                    : 0;
+                const tax = ((subtotal - discount) * p.taxPct) / 100;
+                return (subtotal - discount + tax).toFixed(2);
+              },
+            },
+            {
+              label: "4 tickets, 1 snack",
+              input: { tickets: "4", snacks: "1" },
+              expectFinal: (p) => {
+                const subtotal = p.ticketPrice * 4 + p.snackPrice * 1;
+                const discount =
+                  subtotal >= p.discountThreshold
+                    ? (subtotal * p.discountPct) / 100
+                    : 0;
+                const tax = ((subtotal - discount) * p.taxPct) / 100;
+                return (subtotal - discount + tax).toFixed(2);
+              },
+            },
+            {
+              label: "Nothing ordered (0, 0)",
+              input: { tickets: "0", snacks: "0" },
+              expectFinal: () => "0.00",
+            },
+          ],
+        },
+      };
+
+      // Resolve every template above, using this tab's own stable per-sitting seed, and merge the
+      // results into QUESTIONS right alongside the hand-written questions - from this point on, a
+      // templated question is indistinguishable from a static one to the rest of the app (tests.js,
+      // debugger.js, editor-ui.js, ...), which never need to know the difference.
+      (function resolveAllTemplates() {
+        const rng = makeRng(TEMPLATE_SEED);
+        for (const k in QUESTION_TEMPLATES)
+          QUESTIONS[k] = resolveTemplate(QUESTION_TEMPLATES[k], rng);
+      })();
+
+      // Which question keys THIS build actually offers, in picker order. Leave empty for the full
+      // development/demo build (everything above is offered, as today). For one exam's build,
+      // Claude sets this to just that exam's keys on request - e.g. ['part1','part2','part3'] for
+      // an exam using only those - so students see (and can only reach, even via a direct ?q=
+      // link) that exam's own question set, while the full library keeps living in this one file
+      // across every exam. 'blank' is always kept available as a safety net regardless of this list.
+      const EXAM_SET = [];
+      if (EXAM_SET.length) {
+        for (const k in QUESTIONS)
+          if (k !== "blank" && !EXAM_SET.includes(k)) delete QUESTIONS[k];
+      }
+
       /* File icons: the MIT-licensed VS Code (vscode-icons) file-type icons for PHP, CSS, JS and HTML, embedded so no download is needed. */
       const ICON_SVG = {
         php: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><radialGradient id="SVGQRCVdbYF" cx="-16.114" cy="20.532" r="18.384" gradientTransform="translate(26.52 -9.307)" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#fff"/><stop offset=".5" stop-color="#4c6b96"/><stop offset="1" stop-color="#231f20"/></radialGradient></defs><ellipse cx="16" cy="16" fill="url(#SVGQRCVdbYF)" rx="14" ry="7.365"/><ellipse cx="16" cy="16" fill="#6280b6" rx="13.453" ry="6.818"/><path fill="#fff" d="m18.725 18.2l.667-3.434a1.75 1.75 0 0 0-.372-1.719a2.93 2.93 0 0 0-2-.525h-1.153l.331-1.7a.22.22 0 0 0-.215-.26h-1.6a.22.22 0 0 0-.215.177l-.709 3.646a2.05 2.05 0 0 0-.477-1.054a2.78 2.78 0 0 0-2.2-.807H7.7a.22.22 0 0 0-.215.177l-1.434 7.38a.22.22 0 0 0 .215.26h1.603a.22.22 0 0 0 .215-.177l.347-1.785h1.2a5.2 5.2 0 0 0 1.568-.2a3.1 3.1 0 0 0 1.15-.689a3.5 3.5 0 0 0 .68-.844l-.287 1.475a.22.22 0 0 0 .215.26h1.6a.22.22 0 0 0 .215-.177l.787-4.051h1.094c.466 0 .6.093.64.133s.1.165.025.569l-.635 3.265a.22.22 0 0 0 .215.26h1.62a.22.22 0 0 0 .207-.18m-7.395-2.834a1.75 1.75 0 0 1-.561 1.092a2.17 2.17 0 0 1-1.315.321h-.712l.515-2.651h.921c.677 0 .949.145 1.059.266a1.18 1.18 0 0 1 .093.972m14.216-2.034a2.78 2.78 0 0 0-2.2-.807h-3.091a.22.22 0 0 0-.215.177l-1.434 7.38a.22.22 0 0 0 .215.26h1.608a.22.22 0 0 0 .215-.177l.347-1.785h1.2a5.2 5.2 0 0 0 1.568-.2a3.1 3.1 0 0 0 1.15-.689a3.43 3.43 0 0 0 1.076-1.927a2.51 2.51 0 0 0-.439-2.232m-1.667 2.034a1.75 1.75 0 0 1-.561 1.092a2.17 2.17 0 0 1-1.318.32h-.71l.515-2.651h.921c.677 0 .949.145 1.059.266a1.18 1.18 0 0 1 .094.973"/><path fill="#000004" d="M10.178 13.908a1.65 1.65 0 0 1 1.221.338a1.34 1.34 0 0 1 .145 1.161a1.95 1.95 0 0 1-.642 1.223a2.36 2.36 0 0 1-1.448.37h-.978l.6-3.089Zm-3.917 6.216h1.608l.381-1.962h1.377a5 5 0 0 0 1.5-.191a2.84 2.84 0 0 0 1.07-.642a3.2 3.2 0 0 0 1.01-1.808a2.3 2.3 0 0 0-.385-2.044a2.57 2.57 0 0 0-2.035-.732H7.7Zm8.126-9.342h1.6l-.387 1.962h1.421a2.77 2.77 0 0 1 1.85.468a1.55 1.55 0 0 1 .305 1.516l-.667 3.434H16.89l.635-3.265a.89.89 0 0 0-.08-.76a1.12 1.12 0 0 0-.8-.2H15.37l-.822 4.228h-1.6Zm8.34 3.126a1.65 1.65 0 0 1 1.221.338a1.34 1.34 0 0 1 .145 1.161a1.95 1.95 0 0 1-.642 1.223A2.36 2.36 0 0 1 22 17h-.978l.6-3.089Zm-3.917 6.216h1.608l.381-1.962h1.377a5 5 0 0 0 1.5-.191a2.84 2.84 0 0 0 1.07-.642a3.2 3.2 0 0 0 1.01-1.808a2.3 2.3 0 0 0-.385-2.044a2.57 2.57 0 0 0-2.035-.732h-3.092Z"/></svg>',
@@ -2539,11 +2817,14 @@ button{margin-top:6px;padding:8px 16px;background:#4a3f8c;color:#fff;border:0;bo
 
       const $ = (id) => document.getElementById(id);
       const params = new URLSearchParams(location.search);
+      // With no ?q= at all, default to this build's first EXAM_SET entry when one is set
+      // (questions.js), so a per-exam build opens straight into that exam's own first question
+      // instead of always falling back to 'part1', which that build might not even include.
       let key = QUESTIONS[params.get("q")]
         ? params.get("q")
         : params.get("q")
           ? "blank"
-          : "part1";
+          : EXAM_SET[0] || "part1";
       let docs = {},
         custom = [],
         folders = [],

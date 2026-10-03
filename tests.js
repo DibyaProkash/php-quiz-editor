@@ -6,7 +6,8 @@
 // exactly as the interpreter reported them).
 
 async function runOneTest(t) {
-  const main = mainName;
+  const main = mainName,
+    q = QUESTIONS[key];
   await phpReady;
   if (!PhpWeb)
     return {
@@ -18,7 +19,7 @@ async function runOneTest(t) {
     sinkText = "";
     sinkErrs = ""; // reset before anything can throw, so a failed getPhp()/mkdir/writeFile
     // never leaves a PREVIOUS run's leftover output sitting in the sinks
-    const engine = await getPhp();
+    const engine = await getPhp(q.sql);
     for (const d of allFolders()) {
       try {
         await engine.mkdir("/" + d);

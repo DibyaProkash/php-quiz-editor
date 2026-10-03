@@ -8,7 +8,10 @@
 // a brand new page into the iframe.
 
 const CONSOLE_ICON = {
-  log: '', info: 'ℹ️ ', warn: '⚠️ ', error: '⛔ '
+  log: "",
+  info: "ℹ️ ",
+  warn: "⚠️ ",
+  error: "⛔ ",
 };
 
 // var, not let/const: in the concatenated single-script builds (the jsdom test harness and
@@ -24,20 +27,33 @@ function resetConsolePanel() {
 }
 
 function handleConsoleMessage(data) {
-  consoleEntries.push({ level: data.level || 'log', text: String(data.text ?? '') });
+  consoleEntries.push({
+    level: data.level || "log",
+    text: String(data.text ?? ""),
+  });
   renderConsolePanel();
 }
 
 function renderConsolePanel() {
-  const list = $('consoleList'), badge = $('consoleBadge');
-  $('consoleEmpty').hidden = consoleEntries.length > 0;
-  list.innerHTML = consoleEntries.map(en =>
-    '<div class="consoleEntry consoleEntry-' + en.level + '">' +
-      '<span class="consoleIcon">' + CONSOLE_ICON[en.level] + '</span>' +
-      '<span class="consoleText">' + esc(en.text) + '</span>' +
-    '</div>'
-  ).join('');
-  const errCount = consoleEntries.filter(en => en.level === 'error').length;
+  const list = $("consoleList"),
+    badge = $("consoleBadge");
+  $("consoleEmpty").hidden = consoleEntries.length > 0;
+  list.innerHTML = consoleEntries
+    .map(
+      (en) =>
+        '<div class="consoleEntry consoleEntry-' +
+        en.level +
+        '">' +
+        '<span class="consoleIcon">' +
+        CONSOLE_ICON[en.level] +
+        "</span>" +
+        '<span class="consoleText">' +
+        esc(en.text) +
+        "</span>" +
+        "</div>",
+    )
+    .join("");
+  const errCount = consoleEntries.filter((en) => en.level === "error").length;
   badge.hidden = errCount === 0;
   if (errCount) badge.textContent = String(errCount);
 }

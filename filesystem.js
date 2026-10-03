@@ -1,10 +1,13 @@
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
+// With no ?q= at all, default to this build's first EXAM_SET entry when one is set
+// (questions.js), so a per-exam build opens straight into that exam's own first question
+// instead of always falling back to 'part1', which that build might not even include.
 let key = QUESTIONS[params.get("q")]
   ? params.get("q")
   : params.get("q")
     ? "blank"
-    : "part1";
+    : EXAM_SET[0] || "part1";
 let docs = {},
   custom = [],
   folders = [],
