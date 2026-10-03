@@ -1,5 +1,5 @@
 /* ------------------------------------------------------------------
-   QUESTIONS  (link students to  index.html?q=part1 )
+   QUESTIONS  (link students to  index.html?q=mv1a )
    files     : the run file is the first .php file (index.php).
                editable:false makes a file read-only (CSS/JS you provide).
                Other files are inlined into the preview automatically when
@@ -7,9 +7,11 @@
    preview   : true  = show rendered page. false = plain text output only.
    stdin     : text for the Input box (readline()/fgets(STDIN)). Omit to hide the box.
    hints     : optional array, revealed one at a time.
-   tests     : optional array of { label, input: {postFieldName: value, ...}, expectFinal }.
-               Each test POSTs `input` to the student's own current code through the real
-               PHP engine and compares the rendered ".total" row against expectFinal.
+   tests     : optional array of { label, input: {fieldName: value, ...}, expectFinal, method }.
+               Each test sends `input` as $_POST (or, with method:'get', as $_GET) to the
+               student's own current code through the real PHP engine and compares the
+               rendered ".total" row against expectFinal. `method` defaults to 'post' -
+               only set it to 'get' for a question whose form itself uses method="get".
                Adds a "Tests" tab where students can run these themselves. Omit to hide it.
    functions : optional array of { sig, desc, example } shown in a collapsible
                "PHP function reference" panel. Omit to hide that panel.
@@ -18,62 +20,12 @@
                genuine SQL, not a simulation. The database is in-memory and brand new on
                every Run/Debug/Tests click, so a SQL question's own code should create and
                seed whatever tables it needs each time, rather than assuming yesterday's
-               data (or even the previous click's data) is still there.
+               data (or even the previous click's data) is still there. (No current question
+               uses this, but the engine support is still here in case a future one does.)
 ------------------------------------------------------------------- */
 
-// PDO methods worth knowing for a question that uses `sql: true`.
-const PDO_FUNCS = [
-  {
-    sig: "new PDO(string $dsn): PDO",
-    desc: 'Opens a database connection. This editor\'s SQL questions always use the DSN "pgsql:" - a fresh, empty, in-memory Postgres database for this run only.',
-    example: "$pdo = new PDO('pgsql:');",
-  },
-  {
-    sig: "PDO::exec(string $sql): int|false",
-    desc: "Runs a SQL statement that does not return rows (CREATE TABLE, INSERT, UPDATE, DELETE) and returns the number of affected rows.",
-    example:
-      "$pdo->exec(\"INSERT INTO students (name, grade) VALUES ('Alice', 95)\");",
-  },
-  {
-    sig: "PDO::query(string $sql): PDOStatement",
-    desc: "Runs a SQL SELECT and returns a statement you can loop over to read the rows back.",
-    example:
-      "$rows = $pdo->query(\"SELECT * FROM students ORDER BY grade DESC\");\nforeach ($rows as $row) { echo $row['name']; }",
-  },
-  {
-    sig: "PDO::prepare(string $sql): PDOStatement",
-    desc: "Prepares a SQL statement with ? or :name placeholders, so you can safely plug in values (including ones a user typed) without building the SQL string by hand.",
-    example:
-      '$stmt = $pdo->prepare("INSERT INTO students (name, grade) VALUES (?, ?)");\n$stmt->execute([$name, $grade]);',
-  },
-  {
-    sig: "PDOStatement::fetchAll(): array",
-    desc: "Reads every remaining row from a statement at once, as an array of associative arrays.",
-    example: "$pdo->query('SELECT * FROM students')->fetchAll();",
-  },
-];
-
-// The 3 official test cases for the Café Order Calculator (same math in all 3 parts).
-const CAFE_TESTS = [
-  {
-    label: "2 sandwiches, 2 drinks, 1 dessert",
-    input: { sandwiches: "2", drinks: "2", desserts: "1" },
-    expectFinal: "27.30",
-  },
-  {
-    label: "3 sandwiches, 2 drinks, 1 dessert",
-    input: { sandwiches: "3", drinks: "2", desserts: "1" },
-    expectFinal: "32.60",
-  },
-  {
-    label: "Nothing ordered (0, 0, 0)",
-    input: { sandwiches: "0", drinks: "0", desserts: "0" },
-    expectFinal: "0.00",
-  },
-];
-
-// Built-in PHP functions worth knowing for this question. Real functions, real PHP -
-// the editor runs actual PHP 8.4, so every one of these already works as shown.
+// Built-in PHP functions worth knowing for the OOP-based Movie Night questions below.
+// Real functions, real PHP - the editor runs actual PHP 8.4.
 const CAFE_FUNCS_BASE = [
   {
     sig: "number_format(float $num, int $decimals = 0): string",
@@ -91,70 +43,203 @@ const CAFE_FUNCS_BASE = [
     example: "isset($_POST['sandwiches']) ? (int) $_POST['sandwiches'] : 0",
   },
 ];
-const CAFE_FUNCS_ARRAYS = CAFE_FUNCS_BASE.concat([
+
+// Shared CSS for the Movie Night question sets below - one small helper instead of six
+// almost-identical copy-pasted stylesheets. Each call just picks different accent colors.
+function movieCss(
+  bg,
+  cardBorder,
+  badgeBg,
+  badgeFg,
+  accent,
+  thColor,
+  rowBorder,
+) {
+  return `body{font-family:system-ui,sans-serif;background:${bg};margin:0;padding:24px;color:#1b1b1b}
+.card{max-width:480px;margin:0 auto;background:#fff;padding:24px;border-radius:8px;border:1px solid ${cardBorder}}
+.badge{display:inline-block;margin:0 0 8px;padding:3px 10px;border-radius:999px;background:${badgeBg};color:${badgeFg};font-size:12px;font-weight:600}
+h1{margin:0 0 16px;font-size:21px}
+label{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:10px}
+input[type=text],input[type=number],input[type=email],select{padding:6px;min-width:130px}
+button{margin-top:6px;padding:8px 16px;background:${accent};color:#fff;border:0;border-radius:4px;cursor:pointer}
+.receipt{width:100%;margin-top:20px;border-collapse:collapse}
+.receipt th{text-align:left;font-weight:400;color:${thColor}}
+.receipt td{text-align:right}
+.receipt th,.receipt td{padding:6px 0;border-bottom:1px solid ${rowBorder}}
+.receipt tr.subtotal th,.receipt tr.subtotal td{border-top:2px solid ${rowBorder};font-weight:600;color:#1b1b1b}
+.receipt tr.total th,.receipt tr.total td{font-weight:700;font-size:17px;border-bottom:0}
+.errorBox{margin-top:16px;padding:12px 14px;background:#fdecea;border:1px solid #f5c2c0;border-radius:6px;color:#8a1f1a}
+.errorBox ul{margin:4px 0 0;padding-left:18px}
+.results{margin-top:16px}
+.movieItem{padding:8px 0;border-bottom:1px solid ${rowBorder}}
+.movieItem:last-child{border-bottom:0}
+`;
+}
+const MOVIE_SCRIPT = `document.querySelectorAll('input[type=number],input[type=text]').forEach(function (el) {
+  el.addEventListener('focus', function () { el.select(); });
+});
+`;
+
+// Function references for the Movie Night question sets.
+const MOVIE_OOP_FUNCS = CAFE_FUNCS_BASE;
+const MOVIE_STRING_FUNCS = [
   {
-    sig: "array_sum(array $array): int|float",
-    desc: "Adds up every value in an array and returns the total. Perfect for turning your $costs array into a subtotal.",
-    example:
-      "array_sum(['sandwich' => 17, 'drink' => 5, 'dessert' => 4])\n// 26",
+    sig: "trim(string $str): string",
+    desc: "Removes whitespace (spaces, tabs, newlines) from the start and end of a string.",
+    example: "trim('  Paris  ')\n// 'Paris'",
+  },
+  {
+    sig: "strtolower(string $str): string / strtoupper(string $str): string",
+    desc: "Converts a string to all-lowercase or all-uppercase.",
+    example: "strtolower('PARIS')\n// 'paris'",
+  },
+  {
+    sig: "ucwords(string $str): string",
+    desc: "Capitalizes the first letter of every word in a string.",
+    example: "ucwords('the great escape')\n// 'The Great Escape'",
+  },
+  {
+    sig: "str_contains(string $haystack, string $needle): bool",
+    desc: "Checks whether $haystack contains $needle anywhere inside it. Case-sensitive, so lowercase both sides first for a case-insensitive search.",
+    example: "str_contains('midnight in paris', 'paris')\n// true",
   },
   {
     sig: "count(Countable|array $value): int",
     desc: "Counts how many elements are in an array.",
-    example: "count(['sandwich', 'drink', 'dessert'])\n// 3",
+    example: "count(['a', 'b', 'c'])\n// 3",
   },
   {
-    sig: "array_keys(array $array): array",
-    desc: "Returns a new array containing all the keys of an array.",
-    example:
-      "array_keys(['sandwich' => 8.50, 'drink' => 2.50])\n// ['sandwich', 'drink']",
+    sig: "implode(string $separator, array $array): string",
+    desc: "Joins every element of an array into one string, with $separator between each.",
+    example: "implode(', ', ['Paris', 'Rome'])\n// 'Paris, Rome'",
   },
-]);
+];
+const MOVIE_GET_FUNCS = [
+  {
+    sig: "isset(mixed $var): bool",
+    desc: "Checks whether a variable (or array key) exists and is not null - use it before reading an optional $_GET value.",
+    example: "isset($_GET['genre']) ? $_GET['genre'] : 'All'",
+  },
+  {
+    sig: "in_array(mixed $needle, array $haystack): bool",
+    desc: "Checks whether a value exists anywhere in an array - perfect for validating a submitted value against a fixed list of allowed options.",
+    example: "in_array('Comedy', ['All', 'Sci-Fi', 'Drama'])\n// false",
+  },
+  {
+    sig: "stripos(string $haystack, string $needle): int|false",
+    desc: 'Finds the position of $needle inside $haystack, case-insensitively, or false if it is not there. Commonly used just to check "does this contain that?" with !== false.',
+    example: "stripos('Galactic Drift', 'drift') !== false\n// true",
+  },
+  {
+    sig: "htmlspecialchars(string $string): string",
+    desc: "Escapes HTML special characters (<, >, &, quotes) before a value is echoed back into a page - this is what keeps a value a browser sent you from being able to inject a script (an XSS attack).",
+    example: "htmlspecialchars('<b>hi</b>')\n// '&lt;b&gt;hi&lt;/b&gt;'",
+  },
+  {
+    sig: "array_sum(array $array): int|float",
+    desc: "Adds up every value in an array.",
+    example: "array_sum([9.00, 11.00])\n// 20",
+  },
+];
+const MOVIE_REGEX_NUM_FUNCS = [
+  {
+    sig: "preg_match(string $pattern, string $subject): int|false",
+    desc: "Checks whether $subject matches a regular expression $pattern, returning 1 for a match or 0 for no match.",
+    example: "preg_match('/^[A-Z0-9]{4,10}$/', 'SAVE10')\n// 1",
+  },
+  {
+    sig: "strtoupper(string $str): string",
+    desc: "Converts a string to all-uppercase - handy for normalizing a promo code before checking it.",
+    example: "strtoupper('save10')\n// 'SAVE10'",
+  },
+  {
+    sig: "array_key_exists(string|int $key, array $array): bool",
+    desc: "Checks whether a key exists in an array (even if its value is null) - the right way to check a code against a list of valid codes.",
+    example: "array_key_exists('SAVE10', ['SAVE10' => 10])\n// true",
+  },
+  {
+    sig: "round(float $num, int $precision = 0): float",
+    desc: "Rounds a number to the given number of decimal places.",
+    example: "round(5.004999, 2)\n// 5.0",
+  },
+];
+const MOVIE_VALIDATION_FUNCS = [
+  {
+    sig: "strlen(string $str): int",
+    desc: "Returns the number of characters in a string - use it to check a text field is a reasonable length.",
+    example: "strlen('Sam')\n// 3",
+  },
+  {
+    sig: "is_numeric(mixed $value): bool",
+    desc: 'Checks whether a value looks like a number (it may still be a string, like "7" from a form) - check this before treating it as a number.',
+    example: "is_numeric('7')\n// true",
+  },
+  {
+    sig: "isset(mixed $var): bool",
+    desc: "Checks whether a variable (or array key) exists and is not null - the standard way to check whether a checkbox was ticked.",
+    example: "isset($_POST['terms']) && $_POST['terms'] === 'yes'",
+  },
+  {
+    sig: "implode(string $separator, array $array): string",
+    desc: 'Joins an array of error messages into one string. An empty array joins to an empty (falsy) string, which is a quick way to check "were there any errors at all?"',
+    example: "implode(' ', [])\n// '' (falsy)",
+  },
+  {
+    sig: "htmlspecialchars(string $string): string",
+    desc: "Escapes a value before echoing it back into the page, so a name or message a visitor typed in can never be interpreted as HTML/script.",
+    example: "htmlspecialchars($name)",
+  },
+];
 
 const QUESTIONS = {
-  part1: {
-    title: "Part 1 – Variables, Expressions, and Conditionals",
+  mv1a: {
+    title: "Movie Night Set 1, Part 1 of 3 – Classes and Objects (3 pts)",
     preview: true,
-    tests: CAFE_TESTS,
-    functions: CAFE_FUNCS_BASE,
+    functions: MOVIE_OOP_FUNCS,
+    tests: [
+      {
+        label: "2 tickets (no group discount)",
+        input: { tickets: "2" },
+        expectFinal: "24.00",
+      },
+      {
+        label: "4 tickets (group discount kicks in)",
+        input: { tickets: "4" },
+        expectFinal: "40.80",
+      },
+      { label: "No tickets (0)", input: { tickets: "0" }, expectFinal: "0.00" },
+    ],
     hints: [
-      "Sandwich cost = sandwiches × 8.50. Do the same for drinks and desserts, then add all three for the subtotal.",
-      "Use if ($subtotal >= 30) { ... } else { ... } to set the 10% discount, or $0 otherwise.",
-      "Tax is 5% of the subtotal after the discount is subtracted, not before.",
-      "Use number_format($value, 2) when you display each dollar amount.",
+      "Inside __construct, assign each parameter to the matching property: $this->title = $title; and so on.",
+      "Inside calculateTotal, start with $subtotal = $this->ticketPrice * $tickets;",
+      "Use if ($tickets >= 4) { $discount = $subtotal * 0.15; } else { $discount = 0; }",
+      "Finish with return $subtotal - $discount;",
     ],
     files: [
       {
         name: "README.md",
         editable: false,
-        code: `# Part 1 – Variables, Expressions, and Conditionals
+        code: `# Movie Night Set 1, Part 1 of 3 – Classes and Objects (3 points)
 
 ## Goal
-Finish \`index.php\` so the Student Café order form correctly calculates and displays the total cost of an order.
-
-## Rules for this part
-- Use **plain variables and expressions only** - no functions and no arrays in Part 1 (that comes in Parts 2 and 3).
-- The three item prices are already set for you:
-
-  | Item | Price |
-  |---|---|
-  | Sandwich | \`$8.50\` |
-  | Drink | \`$2.50\` |
-  | Dessert | \`$4.00\` |
+You've already built the Café order calculator with plain variables (Part 1), functions (Part 2), and arrays (Part 3). This quiz moves to **classes and objects** - the same idea of "group related logic together," taken one step further: now the *data* (a movie's title, genre, and price) and the *logic that works on that data* (calculating a total) live together inside one \`Movie\` object.
 
 ## What to build
-When the form is submitted, fill in the \`// TODO\` sections so the page calculates, in order:
+In \`index.php\`, the \`Movie\` class already declares its three properties (\`$title\`, \`$genre\`, \`$ticketPrice\`). Finish it:
 
-1. \`$sandwichCost\`, \`$drinkCost\`, and \`$dessertCost\` - each quantity times its price.
-2. \`$subtotal\` - the three costs added together.
-3. \`$discount\` - **10%** of the subtotal, but only when the subtotal is **$30 or more**; otherwise \`$0\`. Use \`if\`/\`else\`.
-4. \`$tax\` - **5%** of the subtotal *after* the discount has been subtracted.
-5. \`$final\` - the subtotal, minus the discount, plus the tax.
+1. **\`__construct\`** - a class's constructor runs automatically every time you write \`new Movie(...)\`. Store each of the three parameters onto \`$this\` (e.g. \`$this->title = $title;\`).
+2. **\`calculateTotal(int $tickets): float\`** - a *method* (a function that belongs to the class). It should:
+   - Calculate \`$subtotal\` as \`$this->ticketPrice * $tickets\`.
+   - Apply a **15% group discount** to the subtotal, but only when \`$tickets\` is **4 or more** (use \`if\`/\`else\`, exactly like the Café discount logic).
+   - \`return\` the subtotal minus the discount.
 
-Then echo each amount into its matching table cell, using \`number_format($value, 2)\` so every dollar amount always shows two decimal places.
+The rest of the page already creates the object (\`$movie = new Movie('Galactic Drift', 'Sci-Fi', 12.00);\`) and calls \`$movie->calculateTotal($tickets)\` for you.
+
+## Why this matters
+Every property and method you write here is just the variables/conditionals you already know, organized around \`new Movie(...)\` and \`$movie->calculateTotal(...)\` instead of loose variables and a free-floating function - this is the core idea behind OOP (object-oriented programming): bundle data and the behavior that works on it into one object.
 
 ## Testing your code
-Open the **Tests** tab on the right and click **Run tests**. Your code is checked against the real PHP interpreter with a few different orders, and the final amount is compared to the expected total.
+Open the **Tests** tab and click **Run tests**.
 
 ## Files in this project
 | File | Can I edit it? |
@@ -169,509 +254,400 @@ Open the **Tests** tab on the right and click **Run tests**. Your code is checke
         name: "index.php",
         editable: true,
         code: `<?php
-// Part 1 - Variables, Expressions, and Conditionals
-// Do not use functions or arrays in this part.
+// Movie Night Set 1, Part 1 of 3 - Classes and Objects
+// Do not add any top-level functions - the logic belongs inside the Movie class.
 
-$sandwichPrice = 8.50;
-$drinkPrice    = 2.50;
-$dessertPrice  = 4.00;
+class Movie {
+    public string $title;
+    public string $genre;
+    public float $ticketPrice;
 
-$submitted = $_SERVER['REQUEST_METHOD'] === 'POST';
+    public function __construct(string $title, string $genre, float $ticketPrice) {
+        // TODO: store the three parameters on $this (e.g. $this->title = $title;)
 
-if ($submitted) {
-    $sandwiches = (int) ($_POST['sandwiches'] ?? 0);
-    $drinks     = (int) ($_POST['drinks'] ?? 0);
-    $desserts   = (int) ($_POST['desserts'] ?? 0);
+    }
 
-    // TODO: calculate $sandwichCost, $drinkCost and $dessertCost
+    // Returns the final price for a given number of tickets, including the
+    // 15% group discount that applies once 4 or more tickets are bought.
+    public function calculateTotal(int $tickets): float {
+        // TODO: $subtotal = $this->ticketPrice * $tickets;
 
 
-    // TODO: calculate $subtotal
+        // TODO: if $tickets >= 4, $discount = 15% of $subtotal, otherwise $discount = 0
 
 
-    // TODO: use if/else to calculate $discount (10% when $subtotal is 30 or more, otherwise 0)
+        // TODO: return $subtotal - $discount
 
-
-    // TODO: calculate $tax (5% of the subtotal after the discount)
-
-
-    // TODO: calculate $final
-
-}
-?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Student Café</title>
-  <link rel="stylesheet" href="style.css">
-  <script src="script.js" defer><\/script>
-</head>
-<body>
-  <main class="card">
-    <p class="badge">Part 1 of 3</p>
-    <h1>Student Café Order Calculator</h1>
-    <form method="post">
-      <label>Sandwiches <input type="number" name="sandwiches" min="0" value="0"></label>
-      <label>Drinks <input type="number" name="drinks" min="0" value="0"></label>
-      <label>Desserts <input type="number" name="desserts" min="0" value="0"></label>
-      <button type="submit">Calculate</button>
-    </form>
-
-    <?php if ($submitted): ?>
-    <table class="receipt">
-      <tr><th>Sandwich cost</th><td>$<?php // TODO: echo the sandwich cost ?></td></tr>
-      <tr><th>Drink cost</th><td>$<?php // TODO: echo the drink cost ?></td></tr>
-      <tr><th>Dessert cost</th><td>$<?php // TODO: echo the dessert cost ?></td></tr>
-      <tr class="subtotal"><th>Subtotal</th><td>$<?php // TODO: echo the subtotal ?></td></tr>
-      <tr><th>Discount</th><td>$<?php // TODO: echo the discount ?></td></tr>
-      <tr><th>Tax</th><td>$<?php // TODO: echo the tax ?></td></tr>
-      <tr class="total"><th>Final amount</th><td>$<?php // TODO: echo the final amount ?></td></tr>
-    </table>
-    <?php endif; ?>
-  </main>
-</body>
-</html>
-`,
-      },
-      {
-        name: "style.css",
-        editable: false,
-        code: `body{font-family:system-ui,sans-serif;background:#f3efe6;margin:0;padding:24px;color:#2b2b2b}
-.card{max-width:440px;margin:0 auto;background:#fff;padding:24px;border-radius:8px;border:1px solid #ddd}
-.badge{display:inline-block;margin:0 0 8px;padding:3px 10px;border-radius:999px;background:#f1e6db;color:#7a3b1d;font-size:12px;font-weight:600}
-h1{margin:0 0 16px;font-size:21px}
-label{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
-input{width:80px;padding:6px}
-button{margin-top:6px;padding:8px 16px;background:#7a3b1d;color:#fff;border:0;border-radius:4px;cursor:pointer}
-.receipt{width:100%;margin-top:20px;border-collapse:collapse}
-.receipt th{text-align:left;font-weight:400;color:#6b6b6b}
-.receipt td{text-align:right}
-.receipt th,.receipt td{padding:6px 0;border-bottom:1px solid #eee}
-.receipt tr.subtotal th,.receipt tr.subtotal td{border-top:2px solid #ddd;font-weight:600;color:#2b2b2b}
-.receipt tr.total th,.receipt tr.total td{font-weight:700;font-size:17px;border-bottom:0}
-`,
-      },
-      {
-        name: "script.js",
-        editable: false,
-        code: `document.querySelectorAll('input[type=number]').forEach(function (el) {
-  el.addEventListener('focus', function () { el.select(); });
-});
-`,
-      },
-    ],
-  },
-  part2: {
-    title: "Part 2 – Refactor Using Functions",
-    preview: true,
-    tests: CAFE_TESTS,
-    functions: CAFE_FUNCS_BASE,
-    hints: [
-      "calculateSubtotal() takes the three item costs as parameters and returns their sum.",
-      "calculateDiscount() takes the subtotal and returns 10% of it when the subtotal is 30 or more, otherwise 0.",
-      "calculateTax() takes the amount after the discount and returns 5% of it.",
-      "Call each function and store its return value, e.g. $subtotal = calculateSubtotal($sandwichCost, $drinkCost, $dessertCost);",
-    ],
-    files: [
-      {
-        name: "README.md",
-        editable: false,
-        code: `# Part 2 – Refactor Using Functions
-
-## Goal
-Take the same Café order calculation from Part 1 and rebuild it using **functions**, so the calculation logic is defined once and reused.
-
-## What to build
-Three functions are already declared at the top of \`index.php\`, each with a \`// TODO\` for its body:
-
-1. \`calculateSubtotal(float $sandwichCost, float $drinkCost, float $dessertCost): float\`
-   Return the sum of the three item costs.
-2. \`calculateDiscount(float $subtotal): float\`
-   Return **10%** of \`$subtotal\` when it is **$30 or more**, otherwise return \`0\`.
-3. \`calculateTax(float $amountAfterDiscount): float\`
-   Return **5%** of the amount passed in.
-
-Then, further down, call each function and store its return value:
-
-\`\`\`php
-$subtotal = calculateSubtotal($sandwichCost, $drinkCost, $dessertCost);
-$discount = calculateDiscount($subtotal);
-$tax      = calculateTax($subtotal - $discount);
-$final    = $subtotal - $discount + $tax;
-\`\`\`
-
-Finally, echo each amount into its table cell with \`number_format($value, 2)\`, exactly as in Part 1.
-
-## Why functions?
-Functions let you name a calculation once and reuse it - and they make each piece of logic easy to test on its own. The item costs (\`$sandwichCost\`, etc.) are still calculated directly with variables; only the subtotal/discount/tax steps move into functions.
-
-## Testing your code
-Open the **Tests** tab and click **Run tests** - the same 3 official test orders from Part 1 are used to check your final amount.
-
-## Files in this project
-| File | Can I edit it? |
-|---|---|
-| \`index.php\` | ✅ Yes - this is the only file you need to change |
-| \`style.css\` | 🔒 Read-only - provided styling |
-| \`script.js\` | 🔒 Read-only - a small helper script |
-| \`README.md\` | 🔒 Read-only - this file |
-`,
-      },
-      {
-        name: "index.php",
-        editable: true,
-        code: `<?php
-// Part 2 - Refactor Using Functions
-
-function calculateSubtotal(float $sandwichCost, float $drinkCost, float $dessertCost): float {
-    // TODO: return the sum of the three item costs
-}
-
-function calculateDiscount(float $subtotal): float {
-    // TODO: return 10% of $subtotal when it is 30 or more, otherwise return 0
-}
-
-function calculateTax(float $amountAfterDiscount): float {
-    // TODO: return 5% of $amountAfterDiscount
-}
-
-$sandwichPrice = 8.50;
-$drinkPrice    = 2.50;
-$dessertPrice  = 4.00;
-
-$submitted = $_SERVER['REQUEST_METHOD'] === 'POST';
-
-if ($submitted) {
-    $sandwiches = (int) ($_POST['sandwiches'] ?? 0);
-    $drinks     = (int) ($_POST['drinks'] ?? 0);
-    $desserts   = (int) ($_POST['desserts'] ?? 0);
-
-    $sandwichCost = $sandwiches * $sandwichPrice;
-    $drinkCost    = $drinks * $drinkPrice;
-    $dessertCost  = $desserts * $dessertPrice;
-
-    // TODO: $subtotal = calculateSubtotal($sandwichCost, $drinkCost, $dessertCost);
-
-    // TODO: $discount = calculateDiscount($subtotal);
-
-    // TODO: $tax = calculateTax($subtotal - $discount);
-
-    // TODO: $final = ...
-
-}
-?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Student Café</title>
-  <link rel="stylesheet" href="style.css">
-  <script src="script.js" defer><\/script>
-</head>
-<body>
-  <main class="card">
-    <p class="badge">Part 2 of 3</p>
-    <h1>Student Café Order Calculator</h1>
-    <form method="post">
-      <label>Sandwiches <input type="number" name="sandwiches" min="0" value="0"></label>
-      <label>Drinks <input type="number" name="drinks" min="0" value="0"></label>
-      <label>Desserts <input type="number" name="desserts" min="0" value="0"></label>
-      <button type="submit">Calculate</button>
-    </form>
-
-    <?php if ($submitted): ?>
-    <table class="receipt">
-      <tr><th>Sandwich cost</th><td>$<?php // TODO: echo the sandwich cost ?></td></tr>
-      <tr><th>Drink cost</th><td>$<?php // TODO: echo the drink cost ?></td></tr>
-      <tr><th>Dessert cost</th><td>$<?php // TODO: echo the dessert cost ?></td></tr>
-      <tr class="subtotal"><th>Subtotal</th><td>$<?php // TODO: echo the subtotal ?></td></tr>
-      <tr><th>Discount</th><td>$<?php // TODO: echo the discount ?></td></tr>
-      <tr><th>Tax</th><td>$<?php // TODO: echo the tax ?></td></tr>
-      <tr class="total"><th>Final amount</th><td>$<?php // TODO: echo the final amount ?></td></tr>
-    </table>
-    <?php endif; ?>
-  </main>
-</body>
-</html>
-`,
-      },
-      {
-        name: "style.css",
-        editable: false,
-        code: `body{font-family:system-ui,sans-serif;background:#eef4f1;margin:0;padding:24px;color:#213330}
-.card{max-width:440px;margin:0 auto;background:#fff;padding:24px;border-radius:8px;border:1px solid #d7e5e0}
-.badge{display:inline-block;margin:0 0 8px;padding:3px 10px;border-radius:999px;background:#dcefe6;color:#1f5c46;font-size:12px;font-weight:600}
-h1{margin:0 0 16px;font-size:21px}
-label{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
-input{width:80px;padding:6px}
-button{margin-top:6px;padding:8px 16px;background:#2d6a4f;color:#fff;border:0;border-radius:4px;cursor:pointer}
-.receipt{width:100%;margin-top:20px;border-collapse:collapse}
-.receipt th{text-align:left;font-weight:400;color:#5f6f6b}
-.receipt td{text-align:right}
-.receipt th,.receipt td{padding:6px 0;border-bottom:1px solid #e7efec}
-.receipt tr.subtotal th,.receipt tr.subtotal td{border-top:2px solid #d7e5e0;font-weight:600;color:#213330}
-.receipt tr.total th,.receipt tr.total td{font-weight:700;font-size:17px;border-bottom:0}
-`,
-      },
-      {
-        name: "script.js",
-        editable: false,
-        code: `document.querySelectorAll('input[type=number]').forEach(function (el) {
-  el.addEventListener('focus', function () { el.select(); });
-});
-`,
-      },
-    ],
-  },
-  part3: {
-    title: "Part 3 – Refactor Using Associative Arrays",
-    preview: true,
-    tests: CAFE_TESTS,
-    functions: CAFE_FUNCS_ARRAYS,
-    hints: [
-      "Loop with foreach ($prices as $item => $price) and multiply by $quantities[$item] to fill $costs[$item].",
-      "array_sum($costs) adds up every value in the $costs array, giving you the subtotal.",
-      "The discount and tax rules are the same as Parts 1 and 2, just applied to the array-based subtotal.",
-      'You can read a specific cost back out for display with $costs["sandwich"], $costs["drink"] and $costs["dessert"].',
-    ],
-    files: [
-      {
-        name: "README.md",
-        editable: false,
-        code: `# Part 3 – Refactor Using Associative Arrays
-
-## Goal
-Rebuild the Café order calculation once more, this time storing the prices, quantities, and item costs in **associative arrays** instead of separate variables for each item.
-
-## What's already there
-\`$prices\` is an associative array mapping each item name to its price:
-
-\`\`\`php
-$prices = [
-    "sandwich" => 8.50,
-    "drink"    => 2.50,
-    "dessert"  => 4.00,
-];
-\`\`\`
-
-\`$quantities\` is built the same way from the submitted form values, and an empty \`$costs = [];\` array is ready for you to fill in.
-
-## What to build
-1. Loop over \`$prices\` with \`foreach ($prices as $item => $price)\` and set \`$costs[$item] = $price * $quantities[$item];\` for each item.
-2. Calculate \`$subtotal\` from \`$costs\` - try the built-in \`array_sum()\` function instead of adding the three values by hand.
-3. Calculate \`$discount\` (**10%** when the subtotal is **$30 or more**, otherwise \`0\`) and \`$tax\` (**5%** of the subtotal after the discount) - same rules as Parts 1 and 2.
-4. Calculate \`$final\`.
-
-Then echo each amount into its table cell. You can read an individual item's cost back out of the array, e.g. \`$costs['sandwich']\`, \`$costs['drink']\`, \`$costs['dessert']\`. Use \`number_format($value, 2)\` for every dollar amount, as before.
-
-## Why arrays?
-Arrays let this scale to any number of menu items without adding a new variable (and a new line of near-identical code) for each one - the same \`foreach\` loop handles all of them.
-
-## Testing your code
-Open the **Tests** tab and click **Run tests** - the same 3 official test orders are used to check your final amount.
-
-## Files in this project
-| File | Can I edit it? |
-|---|---|
-| \`index.php\` | ✅ Yes - this is the only file you need to change |
-| \`style.css\` | 🔒 Read-only - provided styling |
-| \`script.js\` | 🔒 Read-only - a small helper script |
-| \`README.md\` | 🔒 Read-only - this file |
-`,
-      },
-      {
-        name: "index.php",
-        editable: true,
-        code: `<?php
-// Part 3 - Refactor Using Associative Arrays
-
-$prices = [
-    "sandwich" => 8.50,
-    "drink"    => 2.50,
-    "dessert"  => 4.00,
-];
-
-$submitted = $_SERVER['REQUEST_METHOD'] === 'POST';
-
-if ($submitted) {
-    $quantities = [
-        "sandwich" => (int) ($_POST['sandwiches'] ?? 0),
-        "drink"    => (int) ($_POST['drinks'] ?? 0),
-        "dessert"  => (int) ($_POST['desserts'] ?? 0),
-    ];
-
-    $costs = [];
-    // TODO: loop over $prices with foreach ($prices as $item => $price)
-    //       and set $costs[$item] = $price * $quantities[$item]
-
-
-    // TODO: calculate $subtotal from $costs (try array_sum())
-
-
-    // TODO: calculate $discount (10% when $subtotal is 30 or more, otherwise 0)
-
-
-    // TODO: calculate $tax (5% of the subtotal after the discount)
-
-
-    // TODO: calculate $final
-
-}
-?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Student Café</title>
-  <link rel="stylesheet" href="style.css">
-  <script src="script.js" defer><\/script>
-</head>
-<body>
-  <main class="card">
-    <p class="badge">Part 3 of 3</p>
-    <h1>Student Café Order Calculator</h1>
-    <form method="post">
-      <label>Sandwiches <input type="number" name="sandwiches" min="0" value="0"></label>
-      <label>Drinks <input type="number" name="drinks" min="0" value="0"></label>
-      <label>Desserts <input type="number" name="desserts" min="0" value="0"></label>
-      <button type="submit">Calculate</button>
-    </form>
-
-    <?php if ($submitted): ?>
-    <table class="receipt">
-      <tr><th>Sandwich cost</th><td>$<?php // TODO: echo $costs['sandwich'] ?></td></tr>
-      <tr><th>Drink cost</th><td>$<?php // TODO: echo $costs['drink'] ?></td></tr>
-      <tr><th>Dessert cost</th><td>$<?php // TODO: echo $costs['dessert'] ?></td></tr>
-      <tr class="subtotal"><th>Subtotal</th><td>$<?php // TODO: echo the subtotal ?></td></tr>
-      <tr><th>Discount</th><td>$<?php // TODO: echo the discount ?></td></tr>
-      <tr><th>Tax</th><td>$<?php // TODO: echo the tax ?></td></tr>
-      <tr class="total"><th>Final amount</th><td>$<?php // TODO: echo the final amount ?></td></tr>
-    </table>
-    <?php endif; ?>
-  </main>
-</body>
-</html>
-`,
-      },
-      {
-        name: "style.css",
-        editable: false,
-        code: `body{font-family:system-ui,sans-serif;background:#f0eef7;margin:0;padding:24px;color:#2b2740}
-.card{max-width:440px;margin:0 auto;background:#fff;padding:24px;border-radius:8px;border:1px solid #ddd8ee}
-.badge{display:inline-block;margin:0 0 8px;padding:3px 10px;border-radius:999px;background:#e5e0f5;color:#463a8c;font-size:12px;font-weight:600}
-h1{margin:0 0 16px;font-size:21px}
-label{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
-input{width:80px;padding:6px}
-button{margin-top:6px;padding:8px 16px;background:#4a3f8c;color:#fff;border:0;border-radius:4px;cursor:pointer}
-.receipt{width:100%;margin-top:20px;border-collapse:collapse}
-.receipt th{text-align:left;font-weight:400;color:#655f80}
-.receipt td{text-align:right}
-.receipt th,.receipt td{padding:6px 0;border-bottom:1px solid #ede9f7}
-.receipt tr.subtotal th,.receipt tr.subtotal td{border-top:2px solid #ddd8ee;font-weight:600;color:#2b2740}
-.receipt tr.total th,.receipt tr.total td{font-weight:700;font-size:17px;border-bottom:0}
-`,
-      },
-      {
-        name: "script.js",
-        editable: false,
-        code: `document.querySelectorAll('input[type=number]').forEach(function (el) {
-  el.addEventListener('focus', function () { el.select(); });
-});
-`,
-      },
-    ],
-  },
-  sql1: {
-    title: "Bonus – Student Directory (SQL)",
-    preview: true,
-    sql: true,
-    functions: PDO_FUNCS,
-    hints: [
-      "Connect first: $pdo = new PDO('pgsql:'); - do this before anything else.",
-      "CREATE TABLE students (id SERIAL PRIMARY KEY, name TEXT, grade INT) sets up the table. Run it with $pdo->exec(...).",
-      'Add the submitted name/grade with a prepared statement: $stmt = $pdo->prepare("INSERT INTO students (name, grade) VALUES (?, ?)"); $stmt->execute([$name, $grade]);',
-      'Read everything back sorted highest-first: $pdo->query("SELECT * FROM students ORDER BY grade DESC")->fetchAll().',
-    ],
-    files: [
-      {
-        name: "README.md",
-        editable: false,
-        code: `# Bonus – Student Directory (SQL)
-
-## Goal
-Build a tiny web app with a **real database behind it** - the same PDO API you'd use talking to a real MySQL/Postgres server on a real website, except here it's a genuine Postgres engine running entirely inside your browser tab via WebAssembly. No server, no setup - but it's not a simulation either: it's really parsing and running your SQL.
-
-## The one thing that's different from a real website
-On a real website, the database keeps its data between page requests. Here, every time you click **Run** (or **Tests**/**Debug**), you get a **brand new, empty database** - exactly like every other piece of PHP state in this editor resets between clicks. So your script needs to create its table and insert the submitted row *every single run*, rather than assuming earlier data is still sitting there. That's why the code below creates the table and re-inserts a couple of starter rows each time, then adds whatever the form submitted on top.
-
-## What to build
-1. Connect: \`$pdo = new PDO('pgsql:');\`
-2. Create the \`students\` table (see the TODO in index.php) and insert the two starter rows provided.
-3. If the form was submitted, insert the new name/grade using a **prepared statement** (never build SQL by concatenating a variable directly into the string).
-4. Query all students back out, sorted by grade, highest first, and loop over them to fill in the table rows.
-
-## Files in this project
-| File | Can I edit it? |
-|---|---|
-| \`index.php\` | ✅ Yes - this is the only file you need to change |
-| \`style.css\` | 🔒 Read-only - provided styling |
-| \`README.md\` | 🔒 Read-only - this file |
-`,
-      },
-      {
-        name: "index.php",
-        editable: true,
-        code: `<?php
-// Bonus - Student Directory, backed by a real (in-browser) Postgres database.
-
-$pdo = new PDO('pgsql:');
-
-// TODO: create the students table.
-// $pdo->exec("CREATE TABLE students (id SERIAL PRIMARY KEY, name TEXT, grade INT)");
-
-// Starter rows, re-added every run since the database is empty each time.
-// TODO: insert these two rows (one exec() call per row, or loop + a prepared statement).
-// $pdo->exec("INSERT INTO students (name, grade) VALUES ('Alice', 95)");
-// $pdo->exec("INSERT INTO students (name, grade) VALUES ('Bob', 88)");
-
-$submitted = $_SERVER['REQUEST_METHOD'] === 'POST';
-
-if ($submitted) {
-    $name = $_POST['name'] ?? '';
-    $grade = (int) ($_POST['grade'] ?? 0);
-    if ($name !== '') {
-        // TODO: insert $name/$grade using a prepared statement - never put $name
-        // directly into a SQL string, even though this is only a browser demo.
-        // $stmt = $pdo->prepare("INSERT INTO students (name, grade) VALUES (?, ?)");
-        // $stmt->execute([$name, $grade]);
     }
 }
 
-// TODO: fetch every student, ordered by grade descending, into $students.
-$students = [];
-// $students = $pdo->query("SELECT * FROM students ORDER BY grade DESC")->fetchAll();
+$movie = new Movie('Galactic Drift', 'Sci-Fi', 12.00);
+
+$submitted = $_SERVER['REQUEST_METHOD'] === 'POST';
+$tickets = 0;
+$final = 0;
+
+if ($submitted) {
+    $tickets = (int) ($_POST['tickets'] ?? 0);
+    $final = $movie->calculateTotal($tickets);
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Student Directory</title>
+  <title>Movie Night Box Office</title>
   <link rel="stylesheet" href="style.css">
+  <script src="script.js" defer><\/script>
 </head>
 <body>
   <main class="card">
-    <h1>Student Directory</h1>
+    <p class="badge">Movie Night · Set 1 · Part 1 of 3</p>
+    <h1>🎬 <?php echo htmlspecialchars($movie->title); ?></h1>
+    <p><?php echo htmlspecialchars($movie->genre); ?> · $<?php echo number_format($movie->ticketPrice, 2); ?> / ticket · 15% off for 4+ tickets</p>
     <form method="post">
-      <label>Name <input type="text" name="name" required></label>
-      <label>Grade <input type="number" name="grade" min="0" max="100" value="0"></label>
-      <button type="submit">Add student</button>
+      <label>Tickets <input type="number" name="tickets" min="0" value="0"></label>
+      <button type="submit">Buy tickets</button>
     </form>
-    <table class="roster">
-      <tr><th>Name</th><th>Grade</th></tr>
-      <?php foreach ($students as $s): ?>
-      <tr><td><?php echo htmlspecialchars($s['name']); ?></td><td><?php echo (int) $s['grade']; ?></td></tr>
+
+    <?php if ($submitted): ?>
+    <table class="receipt">
+      <tr><th>Tickets</th><td><?php echo $tickets; ?></td></tr>
+      <tr class="total"><th>Final amount</th><td>$<?php echo number_format($final, 2); ?></td></tr>
+    </table>
+    <?php endif; ?>
+  </main>
+</body>
+</html>
+`,
+      },
+      {
+        name: "style.css",
+        editable: false,
+        code: movieCss(
+          "#1b1033",
+          "#352a57",
+          "#ffd369",
+          "#4a2f00",
+          "#6f4fd1",
+          "#8d7fb0",
+          "#3a2f5c",
+        ),
+      },
+      { name: "script.js", editable: false, code: MOVIE_SCRIPT },
+    ],
+  },
+  mv1b: {
+    title: "Movie Night Set 1, Part 2 of 3 – Built-in Functions (3 pts)",
+    preview: true,
+    functions: MOVIE_STRING_FUNCS,
+    tests: [
+      {
+        label: 'Search "paris"',
+        input: { keyword: "paris" },
+        expectFinal: "20.00",
+      },
+      {
+        label: 'Search "the" (3+ matches → combo deal)',
+        input: { keyword: "the" },
+        expectFinal: "24.00",
+      },
+      { label: "Blank search", input: { keyword: "" }, expectFinal: "0.00" },
+    ],
+    hints: [
+      "$keyword = strtolower(trim($_POST['keyword'] ?? '')); - clean the search box the same way you clean each title.",
+      "For each title: $clean = strtolower(trim($raw)); and $display = ucwords($clean);",
+      "Only add to $matches when $keyword !== '' and str_contains($clean, $keyword) is true.",
+      "$subtotal = count($matches) * 10.00; then 20% off when count($matches) >= 3.",
+    ],
+    files: [
+      {
+        name: "README.md",
+        editable: false,
+        code: `# Movie Night Set 1, Part 2 of 3 – Built-in Functions (3 points)
+
+## Goal
+\`$rawTitles\` below is realistic, messy data - extra spaces, inconsistent capitalization - exactly the kind of thing Chapter 5's built-in string functions exist to clean up. Build a "Combo Deal Finder": search the messy list, display a clean version of each match, and price the deal.
+
+## What to build
+Fill in the \`// TODO\` sections in \`index.php\`:
+
+1. Lowercase the submitted \`$keyword\` (it's already trimmed for you) with \`strtolower\`.
+2. Inside the loop over \`$rawTitles\`, for each \`$raw\`:
+   - \`$clean\` - a trimmed, lowercased version (for comparing).
+   - \`$display\` - a nicely capitalized version for showing on screen (\`ucwords\` on the cleaned-up lowercase string).
+   - If \`$keyword\` isn't blank **and** \`$clean\` contains \`$keyword\` (\`str_contains\`), add \`$display\` to \`$matches\`.
+3. \`$matchCount = count($matches);\`
+4. Pricing: **$10.00 per matching movie**, with a **20% "combo deal" discount** once **3 or more** movies match (reuse the if/else discount pattern from the Café questions).
+
+## Testing your code
+Open the **Tests** tab and click **Run tests**.
+
+## Files in this project
+| File | Can I edit it? |
+|---|---|
+| \`index.php\` | ✅ Yes - this is the only file you need to change |
+| \`style.css\` | 🔒 Read-only - provided styling |
+| \`script.js\` | 🔒 Read-only - a small helper script |
+| \`README.md\` | 🔒 Read-only - this file |
+`,
+      },
+      {
+        name: "index.php",
+        editable: true,
+        code: `<?php
+// Movie Night Set 1, Part 2 of 3 - Built-in Functions
+// $rawTitles is intentionally messy - extra spaces, inconsistent capitalization -
+// exactly the kind of real-world data Chapter 5's string functions clean up.
+
+$rawTitles = [
+    '  the great escape  ',
+    'Midnight In Paris',
+    '  THE LAST VOYAGE',
+    'ocean drive  ',
+    'The Theory of Everything',
+    'paris by night  '
+];
+
+$submitted = $_SERVER['REQUEST_METHOD'] === 'POST';
+$matches = [];
+$matchCount = 0;
+$final = 0;
+
+if ($submitted) {
+    $keyword = trim($_POST['keyword'] ?? '');
+    // TODO: lowercase $keyword so the search is case-insensitive (strtolower)
+
+
+    foreach ($rawTitles as $raw) {
+        // TODO: $clean = a trimmed, lowercased version of $raw
+
+
+        // TODO: $display = ucwords($clean) - a nicely capitalized version to display
+
+
+        // TODO: if $keyword is not blank AND $clean contains $keyword (str_contains),
+        //       add $display to $matches
+
+    }
+
+    $matchCount = count($matches); // TODO
+
+    // $10.00 per matching movie, with a 20% "combo deal" once 3 or more match.
+    $subtotal = $matchCount * 10.00; // TODO
+    $discount = $matchCount >= 3 ? $subtotal * 0.20 : 0; // TODO
+    $final = $subtotal - $discount; // TODO
+}
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Combo Deal Finder</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="script.js" defer><\/script>
+</head>
+<body>
+  <main class="card">
+    <p class="badge">Movie Night · Set 1 · Part 2 of 3</p>
+    <h1>🎬 Combo Deal Finder</h1>
+    <form method="post">
+      <label>Search <input type="text" name="keyword" placeholder="e.g. the, paris"></label>
+      <button type="submit">Search</button>
+    </form>
+
+    <?php if ($submitted): ?>
+    <div class="results">
+      <?php foreach ($matches as $title): ?>
+        <p class="movieItem"><?php echo htmlspecialchars($title); ?></p>
       <?php endforeach; ?>
+      <?php if (!$matches): ?><p class="movieItem">No matches.</p><?php endif; ?>
+    </div>
+    <table class="receipt">
+      <tr><th>Movies matched</th><td><?php echo $matchCount; ?></td></tr>
+      <tr class="total"><th>Final amount</th><td>$<?php echo number_format($final, 2); ?></td></tr>
+    </table>
+    <?php endif; ?>
+  </main>
+</body>
+</html>
+`,
+      },
+      {
+        name: "style.css",
+        editable: false,
+        code: movieCss(
+          "#1b1033",
+          "#352a57",
+          "#ffd369",
+          "#4a2f00",
+          "#6f4fd1",
+          "#8d7fb0",
+          "#3a2f5c",
+        ),
+      },
+      { name: "script.js", editable: false, code: MOVIE_SCRIPT },
+    ],
+  },
+  mv1c: {
+    title:
+      "Movie Night Set 1, Part 3 of 3 – Getting Data from the Browser (4 pts)",
+    preview: true,
+    functions: MOVIE_GET_FUNCS,
+    tests: [
+      {
+        label: "No filters (defaults)",
+        input: {},
+        method: "get",
+        expectFinal: "45.90",
+      },
+      {
+        label: "Genre = Animation",
+        input: { genre: "Animation" },
+        method: "get",
+        expectFinal: "16.20",
+      },
+      {
+        label: 'Search "the"',
+        input: { keyword: "the" },
+        method: "get",
+        expectFinal: "17.10",
+      },
+      {
+        label: 'Invalid genre "Horror" falls back to All',
+        input: { genre: "Horror" },
+        method: "get",
+        expectFinal: "45.90",
+      },
+      {
+        label: "Family-friendly only",
+        input: { family: "yes" },
+        method: "get",
+        expectFinal: "26.10",
+      },
+    ],
+    hints: [
+      "This form uses method=\"get\", so everything comes from $_GET, not $_POST - use isset($_GET['keyword']) ? trim($_GET['keyword']) : '' and the same pattern for genre.",
+      "Validate the genre against the allowed list: if (!in_array($genre, $allowedGenres)) { $genre = 'All'; }",
+      "A checkbox is only present in $_GET when it was ticked: $familyOnly = isset($_GET['family']) && $_GET['family'] === 'yes';",
+      "Escape the echoed search keyword with htmlspecialchars($keyword) before showing it back on the page - that is what stops a malicious search term from running as a script (XSS).",
+    ],
+    files: [
+      {
+        name: "README.md",
+        editable: false,
+        code: `# Movie Night Set 1, Part 3 of 3 – Getting Data from the Browser (4 points)
+
+## Goal
+Build a Box Office search page. Unlike every form so far in this quiz, this one uses **\`method="get"\`** - so the search can be bookmarked and shared as a URL - which means the data arrives in \`$_GET\`, not \`$_POST\`.
+
+## What to build
+Fill in the \`// TODO\` sections in \`index.php\`:
+
+1. **Collect** \`$keyword\` from \`$_GET['keyword']\` (trimmed), defaulting to \`''\` if it isn't set.
+2. **Collect** \`$genre\` from \`$_GET['genre']\`, defaulting to \`'All'\` if it isn't set.
+3. **Validate** \`$genre\` - if it isn't one of \`$allowedGenres\`, fall back to \`'All'\` (\`in_array\`). This stops a tampered-with or made-up URL from silently showing zero results.
+4. **Collect** \`$familyOnly\` - \`true\` only when \`$_GET['family']\` is set **and** equals \`'yes'\` (a checkbox is simply missing from \`$_GET\` entirely when it isn't ticked).
+5. Inside the filtering loop, finish the three \`...Ok\` checks (keyword/genre/family) and the two \`$subtotal\`/\`$matchCount\` TODOs after it.
+6. **Escape the output**: when the page echoes the search keyword back (\`Showing results for: ...\`), run it through \`htmlspecialchars()\` first - this is the "escaping output" rule from this week's slides, and it's what stops a search box from being used to inject a script into the page.
+
+Pricing: each matching movie's price is added to the subtotal, with a **10% "double feature" discount** once **2 or more** movies match.
+
+## Testing your code
+Open the **Tests** tab and click **Run tests**. One of the tests submits an invalid genre on purpose, to check that your \`in_array\` fallback actually works.
+
+## Files in this project
+| File | Can I edit it? |
+|---|---|
+| \`index.php\` | ✅ Yes - this is the only file you need to change |
+| \`style.css\` | 🔒 Read-only - provided styling |
+| \`script.js\` | 🔒 Read-only - a small helper script |
+| \`README.md\` | 🔒 Read-only - this file |
+`,
+      },
+      {
+        name: "index.php",
+        editable: true,
+        code: `<?php
+// Movie Night Set 1, Part 3 of 3 - Getting Data from the Browser
+// Notice the form below uses method="get" - everything here comes from $_GET.
+
+$movies = [
+    ['title' => 'Galactic Drift',    'genre' => 'Sci-Fi',    'price' => 12.00, 'family' => false],
+    ['title' => 'The Great Escape',  'genre' => 'Drama',     'price' => 10.00, 'family' => false],
+    ['title' => 'Ocean Friends',     'genre' => 'Animation', 'price' => 9.00,  'family' => true],
+    ['title' => 'Midnight in Paris', 'genre' => 'Romance',   'price' => 11.00, 'family' => true],
+    ['title' => "The Lion's Roar",   'genre' => 'Animation', 'price' => 9.00,  'family' => true],
+];
+$allowedGenres = ['All', 'Sci-Fi', 'Drama', 'Animation', 'Romance'];
+
+// TODO: $keyword = trimmed $_GET['keyword'], or '' if it isn't set (isset + ??)
+$keyword = '';
+
+// TODO: $genre = $_GET['genre'], or 'All' if it isn't set
+$genre = 'All';
+
+// TODO: validate - if $genre is not in $allowedGenres, reset it to 'All' (in_array)
+
+
+// TODO: $familyOnly = true only if $_GET['family'] is set AND equals 'yes'
+$familyOnly = false;
+
+$matches = [];
+foreach ($movies as $movie) {
+    $keywordOk = $keyword === '' || stripos($movie['title'], $keyword) !== false; // TODO
+    $genreOk   = $genre === 'All' || $movie['genre'] === $genre;                  // TODO
+    $familyOk  = !$familyOnly || $movie['family'] === true;                       // TODO
+    if ($keywordOk && $genreOk && $familyOk) {
+        $matches[] = $movie;
+    }
+}
+
+$matchCount = count($matches); // TODO
+$subtotal = 0;
+foreach ($matches as $movie) {
+    // TODO: $subtotal += $movie['price'];
+
+}
+$discount = $matchCount >= 2 ? $subtotal * 0.10 : 0; // TODO - "double feature" 10% off for 2+ results
+$final = $subtotal - $discount; // TODO
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Box Office Search</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="script.js" defer><\/script>
+</head>
+<body>
+  <main class="card">
+    <p class="badge">Movie Night · Set 1 · Part 3 of 3</p>
+    <h1>🎬 Box Office Search</h1>
+    <form method="get">
+      <label>Search <input type="text" name="keyword" value="<?php echo htmlspecialchars($keyword); ?>"></label>
+      <label>Genre
+        <select name="genre">
+          <?php foreach ($allowedGenres as $g): ?>
+            <option value="<?php echo htmlspecialchars($g); ?>" <?php echo $g === $genre ? 'selected' : ''; ?>><?php echo htmlspecialchars($g); ?></option>
+          <?php endforeach; ?>
+        </select>
+      </label>
+      <label><input type="checkbox" name="family" value="yes" <?php echo $familyOnly ? 'checked' : ''; ?>> Family-friendly only</label>
+      <button type="submit">Search</button>
+    </form>
+
+    <p>Showing results for: <strong><?php /* TODO: echo htmlspecialchars($keyword), or '(any title)' when $keyword === '' */ ?></strong></p>
+
+    <div class="results">
+      <?php foreach ($matches as $movie): ?>
+        <p class="movieItem"><?php echo htmlspecialchars($movie['title']); ?> — <?php echo htmlspecialchars($movie['genre']); ?> — $<?php echo number_format($movie['price'], 2); ?></p>
+      <?php endforeach; ?>
+      <?php if (!$matches): ?><p class="movieItem">No matches.</p><?php endif; ?>
+    </div>
+    <table class="receipt">
+      <tr><th>Movies matched</th><td><?php echo $matchCount; ?></td></tr>
+      <tr class="total"><th>Final amount</th><td>$<?php echo number_format($final, 2); ?></td></tr>
     </table>
   </main>
 </body>
@@ -681,17 +657,462 @@ $students = [];
       {
         name: "style.css",
         editable: false,
-        code: `body{font-family:system-ui,sans-serif;background:#f0eef7;margin:0;padding:24px;color:#2b2740}
-.card{max-width:440px;margin:0 auto;background:#fff;padding:24px;border-radius:8px;border:1px solid #ddd8ee}
-h1{margin:0 0 16px;font-size:21px}
-label{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
-input{width:120px;padding:6px}
-button{margin-top:6px;padding:8px 16px;background:#4a3f8c;color:#fff;border:0;border-radius:4px;cursor:pointer}
-.roster{width:100%;margin-top:20px;border-collapse:collapse}
-.roster th{text-align:left;color:#655f80;font-weight:600;border-bottom:2px solid #ddd8ee;padding:6px 0}
-.roster td{padding:6px 0;border-bottom:1px solid #ede9f7}
+        code: movieCss(
+          "#1b1033",
+          "#352a57",
+          "#ffd369",
+          "#4a2f00",
+          "#6f4fd1",
+          "#8d7fb0",
+          "#3a2f5c",
+        ),
+      },
+      { name: "script.js", editable: false, code: MOVIE_SCRIPT },
+    ],
+  },
+  mv2a: {
+    title:
+      "Movie Night Set 2, Part 1 of 3 – Classes and Arrays of Objects (3 pts)",
+    preview: true,
+    functions: MOVIE_OOP_FUNCS,
+    tests: [
+      {
+        label: "2 standard, 1 VIP",
+        input: { standardQty: "2", vipQty: "1" },
+        expectFinal: "36.00",
+      },
+      {
+        label: "4 standard, 2 VIP (6 tickets → group discount)",
+        input: { standardQty: "4", vipQty: "2" },
+        expectFinal: "64.80",
+      },
+      {
+        label: "No tickets",
+        input: { standardQty: "0", vipQty: "0" },
+        expectFinal: "0.00",
+      },
+    ],
+    hints: [
+      "Build the array with a loop: for ($i = 0; $i < $standardQty; $i++) { $tickets[] = new Ticket('standard'); }",
+      "Do the same for $vipQty with new Ticket('vip').",
+      "price() just needs: if ($this->seatType === 'standard') { return 10.00; } return 16.00;",
+      "foreach ($tickets as $ticket) { $subtotal += $ticket->price(); } - calling a method on every object in the array.",
+    ],
+    files: [
+      {
+        name: "README.md",
+        editable: false,
+        code: `# Movie Night Set 2, Part 1 of 3 – Classes and Arrays of Objects (3 points)
+
+## Goal
+Set 2 continues where Set 1 left off. This time, a booking is made of **several \`Ticket\` objects** stored together in one array - combining classes (Part 1 of Set 1) with arrays (the Café's Part 3), the same way a real shopping cart holds a list of item objects.
+
+## What to build
+1. Finish the \`Ticket\` class: the constructor stores \`$seatType\`, and \`price()\` returns **\\$10.00** for \`'standard'\` or **\\$16.00** for \`'vip'\`.
+2. Build \`$tickets\` - an array of \`Ticket\` objects - by looping \`$standardQty\` times creating \`new Ticket('standard')\`, then \`$vipQty\` times creating \`new Ticket('vip')\`.
+3. \`$ticketCount = count($tickets);\`
+4. Loop over \`$tickets\` and add up \`$ticket->price()\` for each one into \`$subtotal\`.
+5. Apply a **10% group discount** once \`$ticketCount\` is **6 or more**, same if/else pattern as always.
+
+## Testing your code
+Open the **Tests** tab and click **Run tests**.
+
+## Files in this project
+| File | Can I edit it? |
+|---|---|
+| \`index.php\` | ✅ Yes - this is the only file you need to change |
+| \`style.css\` | 🔒 Read-only - provided styling |
+| \`script.js\` | 🔒 Read-only - a small helper script |
+| \`README.md\` | 🔒 Read-only - this file |
 `,
       },
+      {
+        name: "index.php",
+        editable: true,
+        code: `<?php
+// Movie Night Set 2, Part 1 of 3 - Classes, Objects, and Arrays of Objects
+
+class Ticket {
+    public string $seatType; // 'standard' or 'vip'
+
+    public function __construct(string $seatType) {
+        // TODO: store $seatType on $this
+
+    }
+
+    public function price(): float {
+        // TODO: return 10.00 for 'standard', or 16.00 for 'vip'
+
+    }
+}
+
+$submitted = $_SERVER['REQUEST_METHOD'] === 'POST';
+$ticketCount = 0;
+$final = 0;
+
+if ($submitted) {
+    $standardQty = (int) ($_POST['standardQty'] ?? 0);
+    $vipQty = (int) ($_POST['vipQty'] ?? 0);
+
+    $tickets = [];
+    // TODO: push $standardQty new Ticket('standard') objects onto $tickets
+
+
+    // TODO: push $vipQty new Ticket('vip') objects onto $tickets
+
+
+    $ticketCount = count($tickets); // TODO
+
+    $subtotal = 0;
+    foreach ($tickets as $ticket) {
+        // TODO: add $ticket->price() to $subtotal
+
+    }
+
+    $discount = $ticketCount >= 6 ? $subtotal * 0.10 : 0; // TODO - 10% group discount for 6+ tickets
+    $final = $subtotal - $discount; // TODO
+}
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Ticket Booking</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="script.js" defer><\/script>
+</head>
+<body>
+  <main class="card">
+    <p class="badge">Movie Night · Set 2 · Part 1 of 3</p>
+    <h1>🎟️ Ticket Booking</h1>
+    <form method="post">
+      <label>Standard tickets ($10.00) <input type="number" name="standardQty" min="0" value="0"></label>
+      <label>VIP tickets ($16.00) <input type="number" name="vipQty" min="0" value="0"></label>
+      <button type="submit">Book tickets</button>
+    </form>
+
+    <?php if ($submitted): ?>
+    <table class="receipt">
+      <tr><th>Tickets booked</th><td><?php echo $ticketCount; ?></td></tr>
+      <tr class="total"><th>Final amount</th><td>$<?php echo number_format($final, 2); ?></td></tr>
+    </table>
+    <?php endif; ?>
+  </main>
+</body>
+</html>
+`,
+      },
+      {
+        name: "style.css",
+        editable: false,
+        code: movieCss(
+          "#2b0f10",
+          "#5c2224",
+          "#ffb3b3",
+          "#5c0000",
+          "#b3302f",
+          "#c79a9a",
+          "#4a2224",
+        ),
+      },
+      { name: "script.js", editable: false, code: MOVIE_SCRIPT },
+    ],
+  },
+  mv2b: {
+    title:
+      "Movie Night Set 2, Part 2 of 3 – Built-in Functions: Regex & Numbers (3 pts)",
+    preview: true,
+    functions: MOVIE_REGEX_NUM_FUNCS,
+    tests: [
+      {
+        label: 'Valid code "save10" (lowercase), 5 tickets',
+        input: { promo: "save10", tickets: "5" },
+        expectFinal: "45.00",
+      },
+      {
+        label: 'Bad format "bogus!!", 5 tickets',
+        input: { promo: "bogus!!", tickets: "5" },
+        expectFinal: "50.00",
+      },
+      {
+        label: "No code, 5 tickets",
+        input: { promo: "", tickets: "5" },
+        expectFinal: "50.00",
+      },
+      {
+        label: 'Valid code "movie5", 3 tickets',
+        input: { promo: "movie5", tickets: "3" },
+        expectFinal: "28.50",
+      },
+    ],
+    hints: [
+      "$promo = strtoupper(trim($rawPromo));",
+      "A promo code is 4-10 characters of uppercase letters/digits only: preg_match('/^[A-Z0-9]{4,10}$/', $promo) === 1",
+      "Only look the code up if the format was valid: $validFormat && array_key_exists($promo, $promoCodes)",
+      "$discountAmount = round($subtotal * $discountPct / 100, 2);",
+    ],
+    files: [
+      {
+        name: "README.md",
+        editable: false,
+        code: `# Movie Night Set 2, Part 2 of 3 – Built-in Functions: Regex & Numbers (3 points)
+
+## Goal
+Validate a promo code using a **regular expression**, look up its discount in an array, and calculate the final price - combining three different kinds of built-in functions from Chapter 5: string, regex, and numeric.
+
+## What to build
+Fill in the \`// TODO\` sections in \`index.php\`:
+
+1. **Normalize** the submitted code: \`$promo = strtoupper(trim($rawPromo));\` so \`"  save10 "\`, \`"SAVE10"\`, and \`"Save10"\` are all treated the same.
+2. **Validate the format** with a regular expression: a real promo code here is **4 to 10 characters, uppercase letters and digits only**. Use \`preg_match('/^[A-Z0-9]{4,10}$/', $promo) === 1\`.
+3. **Look up the discount**: only if the format was valid *and* the code exists as a key in \`$promoCodes\` (\`array_key_exists\`) - otherwise the discount is \`0\`.
+4. **Calculate**: \`$subtotal = $ticketCount * $pricePerTicket;\`, then round the discount amount to 2 decimal places with \`round()\`, then subtract it for \`$final\`.
+
+## Why validate the format first?
+If you only checked \`array_key_exists\`, a code like \`"<script>"\` would just quietly fail the lookup - harmless here, but in a real app you always want to reject obviously-wrong input with a clear rule (the regex) before you even check it against real data.
+
+## Testing your code
+Open the **Tests** tab and click **Run tests** - it checks a valid code, an invalid-format code, no code at all, and a second valid code.
+
+## Files in this project
+| File | Can I edit it? |
+|---|---|
+| \`index.php\` | ✅ Yes - this is the only file you need to change |
+| \`style.css\` | 🔒 Read-only - provided styling |
+| \`script.js\` | 🔒 Read-only - a small helper script |
+| \`README.md\` | 🔒 Read-only - this file |
+`,
+      },
+      {
+        name: "index.php",
+        editable: true,
+        code: `<?php
+// Movie Night Set 2, Part 2 of 3 - Built-in Functions: Regex and Numbers
+
+$promoCodes = ['SAVE10' => 10, 'SAVE20' => 20, 'MOVIE5' => 5]; // code => % off
+$pricePerTicket = 10.00;
+
+$submitted = $_SERVER['REQUEST_METHOD'] === 'POST';
+$ticketCount = 0;
+$final = 0;
+
+if ($submitted) {
+    $ticketCount = (int) ($_POST['tickets'] ?? 0);
+    $rawPromo = $_POST['promo'] ?? '';
+
+    // TODO: $promo = a trimmed, UPPERCASE version of $rawPromo (trim + strtoupper)
+    $promo = '';
+
+    // TODO: $validFormat = true only if $promo is 4-10 characters of A-Z/0-9 only
+    //       (preg_match with a pattern like '/^[A-Z0-9]{4,10}$/')
+    $validFormat = false;
+
+    // TODO: $discountPct = the matching % from $promoCodes if $validFormat is true AND
+    //       $promo exists as a key in $promoCodes (array_key_exists), otherwise 0
+    $discountPct = 0;
+
+    $subtotal = $ticketCount * $pricePerTicket;
+    // TODO: $discountAmount = $subtotal * $discountPct / 100, rounded to 2 decimals (round)
+    $discountAmount = 0;
+
+    $final = $subtotal - $discountAmount; // TODO
+}
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Promo Codes</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="script.js" defer><\/script>
+</head>
+<body>
+  <main class="card">
+    <p class="badge">Movie Night · Set 2 · Part 2 of 3</p>
+    <h1>🎟️ Apply a Promo Code</h1>
+    <form method="post">
+      <label>Tickets ($10.00 each) <input type="number" name="tickets" min="0" value="0"></label>
+      <label>Promo code <input type="text" name="promo" placeholder="optional"></label>
+      <button type="submit">Apply</button>
+    </form>
+
+    <?php if ($submitted): ?>
+    <table class="receipt">
+      <tr><th>Tickets</th><td><?php echo $ticketCount; ?></td></tr>
+      <tr class="total"><th>Final amount</th><td>$<?php echo number_format($final, 2); ?></td></tr>
+    </table>
+    <?php endif; ?>
+  </main>
+</body>
+</html>
+`,
+      },
+      {
+        name: "style.css",
+        editable: false,
+        code: movieCss(
+          "#2b0f10",
+          "#5c2224",
+          "#ffb3b3",
+          "#5c0000",
+          "#b3302f",
+          "#c79a9a",
+          "#4a2224",
+        ),
+      },
+      { name: "script.js", editable: false, code: MOVIE_SCRIPT },
+    ],
+  },
+  mv2c: {
+    title: "Movie Night Set 2, Part 3 of 3 – Form Validation (4 pts)",
+    preview: true,
+    functions: MOVIE_VALIDATION_FUNCS,
+    tests: [
+      {
+        label: "Valid: Alex Kim, 3 tickets",
+        input: { name: "Alex Kim", quantity: "3", terms: "yes" },
+        expectFinal: "30.00",
+      },
+      {
+        label: "Valid: Jo, 10 tickets (upper boundary)",
+        input: { name: "Jo", quantity: "10", terms: "yes" },
+        expectFinal: "100.00",
+      },
+      {
+        label: "Valid: Sam, 1 ticket (lower boundary)",
+        input: { name: "Sam", quantity: "1", terms: "yes" },
+        expectFinal: "10.00",
+      },
+    ],
+    hints: [
+      "Name: if (strlen($name) < 2 || strlen($name) > 40) { $errors['name'] = 'Name must be 2-40 characters'; }",
+      "Quantity: if (!is_numeric($quantity) || $quantity < 1 || $quantity > 10) { $errors['quantity'] = '...'; }",
+      "Terms: if (!$terms) { $errors['terms'] = 'You must agree to the terms'; }",
+      "$invalid = implode($errors); - an empty array implodes to '' (falsy), so `if (!$invalid)` means \"no errors\".",
+    ],
+    files: [
+      {
+        name: "README.md",
+        editable: false,
+        code: `# Movie Night Set 2, Part 3 of 3 – Form Validation (4 points)
+
+## Goal
+This is the quiz's last part, and it brings everything from this week's "Getting Data from the Browser" slides together: collecting several fields, **validating every one of them**, collecting every problem into one \`$errors\` array, and only processing the booking once there are no errors at all.
+
+## What to build
+Fill in the \`// TODO\` sections in \`index.php\`:
+
+1. **Validate \`$name\`**: it must be **2 to 40 characters** (\`strlen\`). If not, set \`$errors['name']\` to a message.
+2. **Validate \`$quantity\`**: it must be numeric (\`is_numeric\`) **and** between **1 and 10**. If not, set \`$errors['quantity']\`.
+3. **Validate \`$terms\`**: the checkbox must have been checked (\`$terms\` is already computed for you). If it's \`false\`, set \`$errors['terms']\`.
+4. \`$invalid = implode($errors);\` - exactly like the slides: an **empty** \`$errors\` array implodes to \`''\`, which is falsy, so \`if (!$invalid)\` means "nothing went wrong."
+5. Only when there are no errors, calculate \`$final = $ticketPrice * (int) $quantity;\`
+
+If there *are* errors, the page already shows them back to the student (each one escaped with \`htmlspecialchars\`) instead of a receipt - you don't need to touch that part, just make sure \`$errors\` ends up with the right messages in it.
+
+## Testing your code
+Open the **Tests** tab and click **Run tests** - all three official tests use valid input (the Tests tab always checks for a final dollar amount), including both edge cases of the ticket-quantity range (1 and 10). Try submitting an invalid name, quantity, or an unchecked box yourself with the **Run** button to see your error messages appear.
+
+## Files in this project
+| File | Can I edit it? |
+|---|---|
+| \`index.php\` | ✅ Yes - this is the only file you need to change |
+| \`style.css\` | 🔒 Read-only - provided styling |
+| \`script.js\` | 🔒 Read-only - a small helper script |
+| \`README.md\` | 🔒 Read-only - this file |
+`,
+      },
+      {
+        name: "index.php",
+        editable: true,
+        code: `<?php
+// Movie Night Set 2, Part 3 of 3 - Getting Data from the Browser: full form validation
+
+$ticketPrice = 10.00;
+$submitted = $_SERVER['REQUEST_METHOD'] === 'POST';
+$errors = [];
+$invalid = '';
+$final = 0;
+$name = '';
+$quantity = '';
+
+if ($submitted) {
+    $name = trim($_POST['name'] ?? '');
+    $quantity = $_POST['quantity'] ?? '';
+    $terms = isset($_POST['terms']) && $_POST['terms'] === 'yes';
+
+    // TODO: if strlen($name) is NOT between 2 and 40, set
+    //       $errors['name'] = 'Name must be 2-40 characters';
+
+
+    // TODO: if $quantity is NOT numeric, OR is less than 1, OR is more than 10, set
+    //       $errors['quantity'] = 'Tickets must be a number between 1 and 10';
+
+
+    // TODO: if $terms is false, set $errors['terms'] = 'You must agree to the terms';
+
+
+    $invalid = implode($errors); // TODO
+
+    if (!$invalid) {
+        $final = $ticketPrice * (int) $quantity; // TODO
+    }
+}
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Checkout</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="script.js" defer><\/script>
+</head>
+<body>
+  <main class="card">
+    <p class="badge">Movie Night · Set 2 · Part 3 of 3</p>
+    <h1>🎟️ Checkout</h1>
+    <form method="post">
+      <label>Name <input type="text" name="name" value="<?php echo htmlspecialchars($name); ?>"></label>
+      <label>Tickets ($10.00 each) <input type="number" name="quantity" min="1" max="10" value="<?php echo htmlspecialchars((string) $quantity); ?>"></label>
+      <label><input type="checkbox" name="terms" value="yes"> I agree to the terms</label>
+      <button type="submit">Book now</button>
+    </form>
+
+    <?php if ($submitted && $invalid): ?>
+    <div class="errorBox">
+      <strong>Please fix the following:</strong>
+      <ul>
+        <?php foreach ($errors as $message): ?>
+          <li><?php echo htmlspecialchars($message); ?></li>
+        <?php endforeach; ?>
+      </ul>
+    </div>
+    <?php elseif ($submitted): ?>
+    <table class="receipt">
+      <tr><th>Booked by</th><td><?php echo htmlspecialchars($name); ?></td></tr>
+      <tr><th>Tickets</th><td><?php echo (int) $quantity; ?></td></tr>
+      <tr class="total"><th>Final amount</th><td>$<?php echo number_format($final, 2); ?></td></tr>
+    </table>
+    <?php endif; ?>
+  </main>
+</body>
+</html>
+`,
+      },
+      {
+        name: "style.css",
+        editable: false,
+        code: movieCss(
+          "#2b0f10",
+          "#5c2224",
+          "#ffb3b3",
+          "#5c0000",
+          "#b3302f",
+          "#c79a9a",
+          "#4a2224",
+        ),
+      },
+      { name: "script.js", editable: false, code: MOVIE_SCRIPT },
     ],
   },
   blank: {
@@ -969,12 +1390,16 @@ button{margin-top:6px;padding:8px 16px;background:#2f6fed;color:#fff;border:0;bo
 })();
 
 // Which question keys THIS build actually offers, in picker order. Leave empty for the full
-// development/demo build (everything above is offered, as today). For one exam's build,
-// Claude sets this to just that exam's keys on request - e.g. ['part1','part2','part3'] for
-// an exam using only those - so students see (and can only reach, even via a direct ?q=
-// link) that exam's own question set, while the full library keeps living in this one file
-// across every exam. 'blank' is always kept available as a safety net regardless of this list.
-const EXAM_SET = [];
+// development/demo build (everything above is offered). For one exam's build, set this to
+// just that exam's keys - e.g. ['mv1a','mv1b','mv1c'] for an exam using only Set 1 - so
+// students see (and can only reach, even via a direct ?q= link) that exam's own question
+// set, while the full library keeps living in this one file across every exam. 'blank' is
+// always kept available as a safety net regardless of this list.
+//
+// Restricted to this quiz's two movie-themed sets only, so students can't stumble onto the
+// "Bonus - Movie Night Order" template question below (left in the file for future reuse,
+// but hidden from the picker and from direct ?q=movie1 links while this is in effect).
+const EXAM_SET = ["mv1a", "mv1b", "mv1c", "mv2a", "mv2b", "mv2c"];
 if (EXAM_SET.length) {
   for (const k in QUESTIONS)
     if (k !== "blank" && !EXAM_SET.includes(k)) delete QUESTIONS[k];

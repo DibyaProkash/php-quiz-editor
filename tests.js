@@ -31,7 +31,7 @@ async function runOneTest(t) {
         n.endsWith(".php") ? fix(docs[n].getValue()) : docs[n].getValue(),
       );
     await engine.run(
-      wrap(docs[main].getValue(), "", { m: "post", d: t.input }),
+      wrap(docs[main].getValue(), "", { m: t.method || "post", d: t.input }),
     );
   } catch (err) {
     sinkErrs += String((err && err.message) || err);
