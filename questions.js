@@ -91,7 +91,7 @@ const MOVIE_VALIDATION_FUNCS = [
   { sig: 'is_numeric(mixed $value): bool', desc: 'Checks whether a value looks like a number (it may still be a string, like "7" from a form) - check this before treating it as a number.', example: "is_numeric('7')\n// true\nis_numeric('seven')\n// false" },
   { sig: 'isset(mixed $var): bool', desc: 'Checks whether a variable (or array key) exists and is not null - the standard way to check whether a checkbox was ticked.', example: "isset($_POST['terms']) && $_POST['terms'] === 'yes'\nisset($_POST['missingCheckbox'])\n// false" },
   { sig: 'implode(string $separator, array $array): string', desc: 'Joins an array of error messages into one string. An empty array joins to an empty (falsy) string, which is a quick way to check "were there any errors at all?"', example: "implode(' ', [])\n// '' (falsy)\nimplode(' ', ['Name is required.', 'Quantity is invalid.'])\n// 'Name is required. Quantity is invalid.' (truthy)" },
-  { sig: 'htmlspecialchars(string $string): string', desc: 'Escapes a value before echoing it back into the page, so a name or message a visitor typed in can never be interpreted as HTML/script.', example: "htmlspecialchars($name)\nhtmlspecialchars('<script>alert(1)</script>')\n// '&lt;script&gt;alert(1)&lt;/script&gt;'" }
+  { sig: 'htmlspecialchars(string $string): string', desc: 'Escapes a value before echoing it back into the page, so a name or message a visitor typed in can never be interpreted as HTML/script.', example: "htmlspecialchars($name)\nhtmlspecialchars('<b>hi</b>')\n// '&lt;b&gt;hi&lt;/b&gt;'" }
 ];
 
 const QUESTIONS = {
