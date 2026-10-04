@@ -1,28 +1,48 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>PHP Editor</title>
-<!-- Applies the saved theme (or the OS's) before first paint, so the page never
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PHP Editor</title>
+    <!-- Applies the saved theme (or the OS's) before first paint, so the page never
      flashes the wrong colors for a moment while the rest of the scripts load. -->
-<script>(function(){
-  try {
-    var pref = sessionStorage.getItem('themePref') || 'system';
-    var eff = pref === 'system' ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : pref;
-    document.documentElement.dataset.theme = eff;
-    document.documentElement.dataset.themePref = pref;
-    var zoomPct = parseInt(sessionStorage.getItem('zoomPct'), 10);
-    if (zoomPct >= 60 && zoomPct <= 200) document.documentElement.style.setProperty('--ui-scale', String(zoomPct / 100));
-  } catch (e) {}
-})();</script>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/show-hint.min.css">
-<link rel="stylesheet" href="styles.css">
-</head>
-<body>
-<!-- ====================================================================
+    <script>
+      (function () {
+        try {
+          var pref = sessionStorage.getItem("themePref") || "system";
+          var eff =
+            pref === "system"
+              ? matchMedia("(prefers-color-scheme: dark)").matches
+                ? "dark"
+                : "light"
+              : pref;
+          document.documentElement.dataset.theme = eff;
+          document.documentElement.dataset.themePref = pref;
+          var zoomPct = parseInt(sessionStorage.getItem("zoomPct"), 10);
+          if (zoomPct >= 60 && zoomPct <= 200)
+            document.documentElement.style.setProperty(
+              "--ui-scale",
+              String(zoomPct / 100),
+            );
+        } catch (e) {}
+      })();
+    </script>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/show-hint.min.css"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <!-- ====================================================================
      QUIZ TIME-LOCK
      Set QUIZ_UNLOCK_AT below to the moment this quiz should open, as an
      ISO 8601 timestamp WITH an explicit UTC offset (so it means the same
@@ -38,180 +58,526 @@
      unlock time. The real protection is not making the URL reachable
      until you intend students to start (see the note you were given
      alongside this file). -->
-<script>var QUIZ_UNLOCK_AT = null; /* time-lock disabled - set back to an ISO timestamp like '2026-10-05T14:30:00-07:00' to re-enable */</script>
-<div id="lockVeil" hidden>
-  <div id="lockCard" role="alertdialog" aria-modal="true" aria-labelledby="lockTitle" aria-describedby="lockWhen lockCountdown">
-    <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
-    <h1 id="lockTitle">This quiz isn't open yet</h1>
-    <p id="lockWhen"></p>
-    <p id="lockCountdown" aria-live="polite"></p>
-    <p class="lockNote">Keep this tab open - it will unlock on its own at the start time. If it doesn't, simply reload the page.</p>
-  </div>
-</div>
-<div id="appRoot">
-<script>
-(function(){
-  if (!QUIZ_UNLOCK_AT) return;
-  var unlockMs = new Date(QUIZ_UNLOCK_AT).getTime();
-  if (!isFinite(unlockMs) || Date.now() >= unlockMs) return;
-  var veil = document.getElementById('lockVeil'), root = document.getElementById('appRoot');
-  veil.hidden = false;
-  root.setAttribute('inert', '');
-  root.setAttribute('aria-hidden', 'true');
-  document.getElementById('lockWhen').textContent = 'It opens ' + new Date(unlockMs).toLocaleString(undefined, { weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' }) + ' (your device\'s local time).';
-  function pad(n){ return n < 10 ? '0' + n : '' + n; }
-  function tick(){
-    var ms = unlockMs - Date.now();
-    if (ms <= 0) { location.reload(); return; }
-    var s = Math.floor(ms / 1000), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
-    document.getElementById('lockCountdown').textContent = 'Opens in ' + (h > 0 ? h + ':' + pad(m) : m) + ':' + pad(sec);
-  }
-  tick();
-  setInterval(tick, 1000);
-})();
-</script>
-<a class="skipLink" href="#code">Skip to code editor</a>
-<header>
-  <h1 id="title">PHP Editor</h1>
-  <select id="picker" aria-label="Question" hidden></select>
-  <button id="debug" class="debugBtn" title="Run and step through your code line by line"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="9" r="4.5"/><path d="M8 4.5V3M5 5.5 3.8 4.2M11 5.5l1.2-1.3M3 9H1M15 9h-2M3.3 12.8 4.8 11.4M12.7 12.8l-1.5-1.4" stroke-linecap="round"/></svg> Debug</button>
-  <button id="run">Run (Ctrl+Enter)</button>
-</header>
-<main>
-  <nav class="explorer" aria-label="Files"><div class="ehead"><h2>Files</h2><div class="etools"><button id="newFile" title="New file" aria-label="New file"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M12 12v6M9 15h6"/></svg></button><button id="newFolder" title="New folder" aria-label="New folder"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 11v6M9 14h6"/></svg></button></div></div><div id="newRow" hidden><input id="newName" maxlength="40" spellcheck="false" autocomplete="off" placeholder="helpers.php" aria-label="New file or folder name"><div id="newErr" role="alert"></div></div><div class="list" id="explorer"></div></nav>
-  <section class="editor">
-    <div class="bar"><div id="filetabs"></div><div class="tools"><button id="format" title="Format code (Shift+Alt+F)" aria-label="Format code"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><path d="M13.5 1C13.7761 1 14 1.22386 14 1.5V2H14.5C14.7761 2 15 2.22386 15 2.5C15 2.77614 14.7761 3 14.5 3H14V3.5C14 3.77614 13.7761 4 13.5 4C13.2239 4 13 3.77614 13 3.5V3H12.5C12.2239 3 12 2.77614 12 2.5C12 2.22386 12.2239 2 12.5 2H13V1.5C13 1.22386 13.2239 1 13.5 1ZM3.5 3C3.77615 3 4 3.22386 4 3.5V4H4.5C4.77615 4 5 4.22386 5 4.5C5 4.77614 4.77615 5 4.5 5H4V5.5C4 5.77614 3.77615 6 3.5 6C3.22386 6 3 5.77614 3 5.5V5H2.5C2.22386 5 2 4.77614 2 4.5C2 4.22386 2.22386 4 2.5 4H3V3.5C3 3.22386 3.22386 3 3.5 3ZM12.5 12C12.7761 12 13 11.7761 13 11.5C13 11.2239 12.7761 11 12.5 11H12V10.5C12 10.2239 11.7761 10 11.5 10C11.2239 10 11 10.2239 11 10.5V11H10.5C10.2239 11 10 11.2239 10 11.5C10 11.7761 10.2239 12 10.5 12H11V12.5C11 12.7761 11.2239 13 11.5 13C11.7761 13 12 12.7761 12 12.5V12H12.5ZM8.72956 4.56346C9.4771 3.81592 10.6891 3.81592 11.4367 4.56347C12.1842 5.31102 12.1842 6.52303 11.4367 7.27058L4.26679 14.4404C3.51924 15.1879 2.30723 15.1879 1.55968 14.4404C0.812134 13.6928 0.812138 12.4808 1.55969 11.7333L8.72956 4.56346Z" fill="currentColor" stroke="none"/></svg></button><button id="undo" title="Undo (Ctrl+Z)" aria-label="Undo" disabled><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg></button><button id="redo" title="Redo (Ctrl+Y)" aria-label="Redo" disabled><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 14 20 9 15 4"/><path d="M4 20v-7a4 4 0 0 1 4-4h12"/></svg></button></div></div>
-    <div id="formatMsg" hidden role="alert"></div>
-    <div id="mdBar" hidden><button id="mdToggle" aria-pressed="false">View source</button><span id="mdNote" class="mdNote">Read-only</span></div>
-    <div id="mdPreview" class="markdown-body" hidden tabindex="0" aria-label="Rendered Markdown preview"></div>
-    <textarea id="code" aria-label="Code editor"></textarea>
-  </section>
-  <section class="side">
-    <div class="bar" id="viewtabs">
-      <button id="vPrev" class="on">Preview</button>
-      <button id="vOut">Output</button>
-      <button id="vTests" hidden>Tests</button>
-      <button id="vDebug">Debugger</button>
-      <button id="vConsole">Console<span id="consoleBadge" class="consoleBadge" hidden>0</span></button>
-      <span id="navNote" hidden></span>
-    </div>
-    <iframe id="frame" title="Page preview" sandbox="allow-scripts allow-forms"></iframe>
-    <pre id="out" hidden aria-live="polite"></pre>
-    <div id="testPanel" hidden>
-      <button id="runTests">Run tests</button>
-      <p class="testNote">Runs your current code through the real PHP interpreter with each set of inputs below, and compares the "Final amount" it produces against the expected answer.</p>
-      <div id="testResults" aria-live="polite"></div>
-    </div>
-    <div id="consolePanel" hidden>
-      <p class="testNote">JS console output and uncaught errors from the page currently shown in Preview - cleared each time you click Run. Clicking a link in Preview that points at another file in your project loads that file here too, instead of being blocked.</p>
-      <div id="consoleEmpty" class="testNote">No console messages yet for this run.</div>
-      <div id="consoleList" aria-live="polite"></div>
-    </div>
-    <div id="debugPanel" hidden>
-      <p class="testNote">Runs your code once, recording every executed line in <strong id="dbgFileName"></strong> along with its variables at that point - then lets you step through that recording. (It can't pause a running program the way a desktop debugger can; this replays what already happened, line by line.)</p>
-      <div id="dbgError" hidden></div>
-      <div id="dbgEmpty" class="testNote">Click <strong>Debug</strong> above to run your code and step through it.</div>
-      <div id="dbgBody" hidden>
-        <div class="dbgToolbar">
-          <button id="dbgFirst" class="sbBtn" title="First step" aria-label="First step">&#8676;</button>
-          <button id="dbgPrev" class="sbBtn" title="Step back" aria-label="Step back">&#9664;</button>
-          <input id="dbgSlider" type="range" min="0" max="0" value="0" aria-label="Debug step">
-          <button id="dbgNext" class="sbBtn" title="Step forward" aria-label="Step forward">&#9654;</button>
-          <button id="dbgLast" class="sbBtn" title="Last step" aria-label="Last step">&#8677;</button>
-        </div>
-        <div class="dbgStatus"><span id="dbgStepLabel"></span><span id="dbgLineInfo"></span></div>
-        <h2>Variables at this step</h2>
-        <div id="dbgVars"></div>
+    <script>
+      var QUIZ_UNLOCK_AT =
+        null; /* time-lock disabled - set back to an ISO timestamp like '2026-10-05T14:30:00-07:00' to re-enable */
+    </script>
+    <div id="lockVeil" hidden>
+      <div
+        id="lockCard"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="lockTitle"
+        aria-describedby="lockWhen lockCountdown"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          width="32"
+          height="32"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.6"
+          aria-hidden="true"
+        >
+          <rect x="5" y="11" width="14" height="10" rx="2" />
+          <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+        </svg>
+        <h1 id="lockTitle">This quiz isn't open yet</h1>
+        <p id="lockWhen"></p>
+        <p id="lockCountdown" aria-live="polite"></p>
+        <p class="lockNote">
+          Keep this tab open - it will unlock on its own at the start time. If
+          it doesn't, simply reload the page.
+        </p>
       </div>
     </div>
-    <div id="stdinbox" hidden><h2>Input (one value per line)</h2><textarea id="stdin" spellcheck="false" aria-label="Program input"></textarea></div>
-    <div id="hintsSection" class="accordionSection" hidden>
-      <button id="hintsToggle" class="accordionBtn" aria-expanded="false" aria-controls="hints">
-        <svg class="chev" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 6l4 4 4-4"/></svg>
-        <span id="hintsToggleLabel">Hints</span>
-      </button>
-      <div id="hints" class="accordionPanel" hidden></div>
+    <div id="appRoot">
+      <script>
+        (function () {
+          if (!QUIZ_UNLOCK_AT) return;
+          var unlockMs = new Date(QUIZ_UNLOCK_AT).getTime();
+          if (!isFinite(unlockMs) || Date.now() >= unlockMs) return;
+          var veil = document.getElementById("lockVeil"),
+            root = document.getElementById("appRoot");
+          veil.hidden = false;
+          root.setAttribute("inert", "");
+          root.setAttribute("aria-hidden", "true");
+          document.getElementById("lockWhen").textContent =
+            "It opens " +
+            new Date(unlockMs).toLocaleString(undefined, {
+              weekday: "long",
+              month: "long",
+              day: "numeric",
+              hour: "numeric",
+              minute: "2-digit",
+            }) +
+            " (your device's local time).";
+          function pad(n) {
+            return n < 10 ? "0" + n : "" + n;
+          }
+          function tick() {
+            var ms = unlockMs - Date.now();
+            if (ms <= 0) {
+              location.reload();
+              return;
+            }
+            var s = Math.floor(ms / 1000),
+              h = Math.floor(s / 3600),
+              m = Math.floor((s % 3600) / 60),
+              sec = s % 60;
+            document.getElementById("lockCountdown").textContent =
+              "Opens in " + (h > 0 ? h + ":" + pad(m) : m) + ":" + pad(sec);
+          }
+          tick();
+          setInterval(tick, 1000);
+        })();
+      </script>
+      <a class="skipLink" href="#code">Skip to code editor</a>
+      <header>
+        <h1 id="title">PHP Editor</h1>
+        <select id="picker" aria-label="Question" hidden></select>
+        <button
+          id="debug"
+          class="debugBtn"
+          title="Run and step through your code line by line"
+        >
+          <svg
+            viewBox="0 0 16 16"
+            width="14"
+            height="14"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.4"
+            aria-hidden="true"
+          >
+            <circle cx="8" cy="9" r="4.5" />
+            <path
+              d="M8 4.5V3M5 5.5 3.8 4.2M11 5.5l1.2-1.3M3 9H1M15 9h-2M3.3 12.8 4.8 11.4M12.7 12.8l-1.5-1.4"
+              stroke-linecap="round"
+            />
+          </svg>
+          Debug
+        </button>
+        <button id="run">Run (Ctrl+Enter)</button>
+      </header>
+      <main>
+        <nav class="explorer" aria-label="Files">
+          <div class="ehead">
+            <h2>Files</h2>
+            <div class="etools">
+              <button id="newFile" title="New file" aria-label="New file">
+                <svg
+                  viewBox="0 0 24 24"
+                  width="16"
+                  height="16"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"
+                  />
+                  <path d="M14 3v5h5M12 12v6M9 15h6" />
+                </svg></button
+              ><button
+                id="newFolder"
+                title="New folder"
+                aria-label="New folder"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  width="16"
+                  height="16"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"
+                  />
+                  <path d="M12 11v6M9 14h6" />
+                </svg>
+              </button>
+            </div>
+          </div>
+          <div id="newRow" hidden>
+            <input
+              id="newName"
+              maxlength="40"
+              spellcheck="false"
+              autocomplete="off"
+              placeholder="helpers.php"
+              aria-label="New file or folder name"
+            />
+            <div id="newErr" role="alert"></div>
+          </div>
+          <div class="list" id="explorer"></div>
+        </nav>
+        <section class="editor">
+          <div class="bar">
+            <div id="filetabs"></div>
+            <div class="tools">
+              <button
+                id="format"
+                title="Format code (Shift+Alt+F)"
+                aria-label="Format code"
+              >
+                <svg
+                  viewBox="0 0 16 16"
+                  width="15"
+                  height="15"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.3"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M13.5 1C13.7761 1 14 1.22386 14 1.5V2H14.5C14.7761 2 15 2.22386 15 2.5C15 2.77614 14.7761 3 14.5 3H14V3.5C14 3.77614 13.7761 4 13.5 4C13.2239 4 13 3.77614 13 3.5V3H12.5C12.2239 3 12 2.77614 12 2.5C12 2.22386 12.2239 2 12.5 2H13V1.5C13 1.22386 13.2239 1 13.5 1ZM3.5 3C3.77615 3 4 3.22386 4 3.5V4H4.5C4.77615 4 5 4.22386 5 4.5C5 4.77614 4.77615 5 4.5 5H4V5.5C4 5.77614 3.77615 6 3.5 6C3.22386 6 3 5.77614 3 5.5V5H2.5C2.22386 5 2 4.77614 2 4.5C2 4.22386 2.22386 4 2.5 4H3V3.5C3 3.22386 3.22386 3 3.5 3ZM12.5 12C12.7761 12 13 11.7761 13 11.5C13 11.2239 12.7761 11 12.5 11H12V10.5C12 10.2239 11.7761 10 11.5 10C11.2239 10 11 10.2239 11 10.5V11H10.5C10.2239 11 10 11.2239 10 11.5C10 11.7761 10.2239 12 10.5 12H11V12.5C11 12.7761 11.2239 13 11.5 13C11.7761 13 12 12.7761 12 12.5V12H12.5ZM8.72956 4.56346C9.4771 3.81592 10.6891 3.81592 11.4367 4.56347C12.1842 5.31102 12.1842 6.52303 11.4367 7.27058L4.26679 14.4404C3.51924 15.1879 2.30723 15.1879 1.55968 14.4404C0.812134 13.6928 0.812138 12.4808 1.55969 11.7333L8.72956 4.56346Z"
+                    fill="currentColor"
+                    stroke="none"
+                  />
+                </svg></button
+              ><button
+                id="undo"
+                title="Undo (Ctrl+Z)"
+                aria-label="Undo"
+                disabled
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  width="16"
+                  height="16"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <polyline points="9 14 4 9 9 4" />
+                  <path d="M20 20v-7a4 4 0 0 0-4-4H4" />
+                </svg></button
+              ><button
+                id="redo"
+                title="Redo (Ctrl+Y)"
+                aria-label="Redo"
+                disabled
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  width="16"
+                  height="16"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <polyline points="15 14 20 9 15 4" />
+                  <path d="M4 20v-7a4 4 0 0 1 4-4h12" />
+                </svg>
+              </button>
+            </div>
+          </div>
+          <div id="formatMsg" hidden role="alert"></div>
+          <div id="mdBar" hidden>
+            <button id="mdToggle" aria-pressed="false">View source</button
+            ><span id="mdNote" class="mdNote">Read-only</span>
+          </div>
+          <div
+            id="mdPreview"
+            class="markdown-body"
+            hidden
+            tabindex="0"
+            aria-label="Rendered Markdown preview"
+          ></div>
+          <textarea id="code" aria-label="Code editor"></textarea>
+        </section>
+        <section class="side">
+          <div class="bar" id="viewtabs">
+            <button id="vPrev" class="on">Preview</button>
+            <button id="vOut">Output</button>
+            <button id="vTests" hidden>Tests</button>
+            <button id="vDebug">Debugger</button>
+            <button id="vConsole">
+              Console<span id="consoleBadge" class="consoleBadge" hidden
+                >0</span
+              >
+            </button>
+            <span id="navNote" hidden></span>
+          </div>
+          <iframe
+            id="frame"
+            title="Page preview"
+            sandbox="allow-scripts allow-forms"
+          ></iframe>
+          <pre id="out" hidden aria-live="polite"></pre>
+          <div id="testPanel" hidden>
+            <button id="runTests">Run tests</button>
+            <p class="testNote">
+              Runs your current code through the real PHP interpreter with each
+              set of inputs below, and compares the "Final amount" it produces
+              against the expected answer.
+            </p>
+            <div id="testResults" aria-live="polite"></div>
+          </div>
+          <div id="consolePanel" hidden>
+            <p class="testNote">
+              JS console output and uncaught errors from the page currently
+              shown in Preview - cleared each time you click Run. Clicking a
+              link in Preview that points at another file in your project loads
+              that file here too, instead of being blocked.
+            </p>
+            <div id="consoleEmpty" class="testNote">
+              No console messages yet for this run.
+            </div>
+            <div id="consoleList" aria-live="polite"></div>
+          </div>
+          <div id="debugPanel" hidden>
+            <p class="testNote">
+              Runs your code once, recording every executed line in
+              <strong id="dbgFileName"></strong> along with its variables at
+              that point - then lets you step through that recording. (It can't
+              pause a running program the way a desktop debugger can; this
+              replays what already happened, line by line.)
+            </p>
+            <div id="dbgError" hidden></div>
+            <div id="dbgEmpty" class="testNote">
+              Click <strong>Debug</strong> above to run your code and step
+              through it.
+            </div>
+            <div id="dbgBody" hidden>
+              <div class="dbgToolbar">
+                <button
+                  id="dbgFirst"
+                  class="sbBtn"
+                  title="First step"
+                  aria-label="First step"
+                >
+                  &#8676;
+                </button>
+                <button
+                  id="dbgPrev"
+                  class="sbBtn"
+                  title="Step back"
+                  aria-label="Step back"
+                >
+                  &#9664;
+                </button>
+                <input
+                  id="dbgSlider"
+                  type="range"
+                  min="0"
+                  max="0"
+                  value="0"
+                  aria-label="Debug step"
+                />
+                <button
+                  id="dbgNext"
+                  class="sbBtn"
+                  title="Step forward"
+                  aria-label="Step forward"
+                >
+                  &#9654;
+                </button>
+                <button
+                  id="dbgLast"
+                  class="sbBtn"
+                  title="Last step"
+                  aria-label="Last step"
+                >
+                  &#8677;
+                </button>
+              </div>
+              <div class="dbgStatus">
+                <span id="dbgStepLabel"></span><span id="dbgLineInfo"></span>
+              </div>
+              <h2>Variables at this step</h2>
+              <div id="dbgVars"></div>
+            </div>
+          </div>
+          <div id="stdinbox" hidden>
+            <h2>Input (one value per line)</h2>
+            <textarea
+              id="stdin"
+              spellcheck="false"
+              aria-label="Program input"
+            ></textarea>
+          </div>
+          <div id="hintsSection" class="accordionSection" hidden>
+            <button
+              id="hintsToggle"
+              class="accordionBtn"
+              aria-expanded="false"
+              aria-controls="hints"
+            >
+              <svg
+                class="chev"
+                viewBox="0 0 16 16"
+                width="12"
+                height="12"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.6"
+                aria-hidden="true"
+              >
+                <path d="M4 6l4 4 4-4" />
+              </svg>
+              <span id="hintsToggleLabel">Hints</span>
+            </button>
+            <div id="hints" class="accordionPanel" hidden></div>
+          </div>
+          <div id="funcsSection" class="accordionSection" hidden>
+            <button
+              id="funcsBtn"
+              class="accordionBtn"
+              aria-expanded="false"
+              aria-controls="funcsPanel"
+            >
+              <svg
+                class="chev"
+                viewBox="0 0 16 16"
+                width="12"
+                height="12"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.6"
+                aria-hidden="true"
+              >
+                <path d="M4 6l4 4 4-4" />
+              </svg>
+              <span id="funcsBtnLabel">PHP function reference</span>
+            </button>
+            <div id="funcsPanel" class="accordionPanel" hidden></div>
+          </div>
+        </section>
+      </main>
+      <footer id="statusbar" aria-label="Editor status bar">
+        <div class="sbCluster">
+          <div class="sbGroup">
+            <button id="reset" class="sbBtn">Reset code</button>
+            <button id="undoDelete" class="sbBtn" hidden>Undo delete</button>
+            <button id="undoReset" class="sbBtn" hidden>Undo reset</button>
+          </div>
+          <span class="sbDivider" aria-hidden="true"></span>
+          <div class="sbGroup">
+            <button id="hint" class="sbBtn" hidden></button>
+          </div>
+        </div>
+        <div class="sbGroup">
+          <div class="sbZoom" role="group" aria-label="Zoom">
+            <svg
+              class="sbZoomIcon"
+              viewBox="0 0 16 16"
+              width="14"
+              height="14"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.4"
+              aria-hidden="true"
+            >
+              <circle cx="6.5" cy="6.5" r="4.5" />
+              <path d="M13.5 13.5L10 10" stroke-linecap="round" />
+            </svg>
+            <button
+              id="zoomOut"
+              class="sbBtn sbZoomBtn"
+              title="Zoom out (Ctrl + -, or Ctrl + scroll down)"
+              aria-label="Zoom out"
+            >
+              &minus;
+            </button>
+            <button
+              id="zoomLevel"
+              class="sbBtn"
+              title="Reset zoom (Ctrl + 0)"
+              aria-label="Reset zoom"
+            >
+              100%
+            </button>
+            <button
+              id="zoomIn"
+              class="sbBtn sbZoomBtn"
+              title="Zoom in (Ctrl + +, or Ctrl + scroll up)"
+              aria-label="Zoom in"
+            >
+              +
+            </button>
+          </div>
+          <label class="sbLabel"
+            >Theme
+            <select id="themePicker" aria-label="Theme">
+              <option value="system">&#128421;&#65039; System</option>
+              <option value="dark">&#127769; Dark</option>
+              <option value="light">&#9728;&#65039; Light</option>
+              <option value="high-contrast">&#9680; High contrast</option>
+              <option value="solarized">&#127749; Solarized dark</option>
+            </select>
+          </label>
+        </div>
+      </footer>
+      <div id="veil" hidden>
+        <div
+          id="dlg"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="dlgT"
+          aria-describedby="dlgB"
+        >
+          <h2 id="dlgT">Reset all code?</h2>
+          <p id="dlgB">
+            This replaces everything you have written, in every file, with the
+            original starter code. You can use Undo reset right afterwards if
+            you change your mind.
+          </p>
+          <div class="row">
+            <button id="no">No, keep my code</button
+            ><button id="yes">Yes, reset everything</button>
+          </div>
+        </div>
+      </div>
     </div>
-    <div id="funcsSection" class="accordionSection" hidden>
-      <button id="funcsBtn" class="accordionBtn" aria-expanded="false" aria-controls="funcsPanel">
-        <svg class="chev" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 6l4 4 4-4"/></svg>
-        <span id="funcsBtnLabel">PHP function reference</span>
-      </button>
-      <div id="funcsPanel" class="accordionPanel" hidden></div>
-    </div>
-  </section>
-</main>
-<footer id="statusbar" aria-label="Editor status bar">
-  <div class="sbCluster">
-    <div class="sbGroup">
-      <button id="reset" class="sbBtn">Reset code</button>
-      <button id="undoDelete" class="sbBtn" hidden>Undo delete</button>
-      <button id="undoReset" class="sbBtn" hidden>Undo reset</button>
-    </div>
-    <span class="sbDivider" aria-hidden="true"></span>
-    <div class="sbGroup">
-      <button id="hint" class="sbBtn" hidden></button>
-    </div>
-  </div>
-  <div class="sbGroup">
-    <div class="sbZoom" role="group" aria-label="Zoom">
-      <svg class="sbZoomIcon" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="6.5" cy="6.5" r="4.5"/><path d="M13.5 13.5L10 10" stroke-linecap="round"/></svg>
-      <button id="zoomOut" class="sbBtn sbZoomBtn" title="Zoom out (Ctrl + -, or Ctrl + scroll down)" aria-label="Zoom out">&minus;</button>
-      <button id="zoomLevel" class="sbBtn" title="Reset zoom (Ctrl + 0)" aria-label="Reset zoom">100%</button>
-      <button id="zoomIn" class="sbBtn sbZoomBtn" title="Zoom in (Ctrl + +, or Ctrl + scroll up)" aria-label="Zoom in">+</button>
-    </div>
-    <label class="sbLabel">Theme
-      <select id="themePicker" aria-label="Theme">
-        <option value="system">&#128421;&#65039; System</option>
-        <option value="dark">&#127769; Dark</option>
-        <option value="light">&#9728;&#65039; Light</option>
-        <option value="high-contrast">&#9680; High contrast</option>
-        <option value="solarized">&#127749; Solarized dark</option>
-      </select>
-    </label>
-  </div>
-</footer>
-<div id="veil" hidden>
-  <div id="dlg" role="alertdialog" aria-modal="true" aria-labelledby="dlgT" aria-describedby="dlgB">
-    <h2 id="dlgT">Reset all code?</h2>
-    <p id="dlgB">This replaces everything you have written, in every file, with the original starter code. You can use Undo reset right afterwards if you change your mind.</p>
-    <div class="row"><button id="no">No, keep my code</button><button id="yes">Yes, reset everything</button></div>
-  </div>
-</div>
-</div><!-- /appRoot -->
+    <!-- /appRoot -->
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/xml/xml.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/css/css.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/htmlmixed/htmlmixed.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/clike/clike.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/php/php.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closetag.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/xml-fold.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchtags.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/show-hint.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/xml-hint.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/html-hint.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/css-hint.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/javascript-hint.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/anyword-hint.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/xml/xml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/css/css.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/htmlmixed/htmlmixed.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/clike/clike.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/php/php.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closetag.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/xml-fold.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchtags.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/show-hint.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/xml-hint.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/html-hint.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/css-hint.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/javascript-hint.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/anyword-hint.min.js"></script>
 
-<script src="php-engine.js"></script>
-<script src="questions.js"></script>
-<script src="icons.js"></script>
-<script src="filesystem.js"></script>
-<script src="editor-ui.js"></script>
-<script src="theme.js"></script>
-<script src="markdown.js"></script>
-<script src="php-runner.js"></script>
-<script src="error-lens.js"></script>
-<script src="tests.js"></script>
-<script src="debugger.js"></script>
-<script src="console.js"></script>
-<script src="php-intellisense.js"></script>
-<script src="php-format.js"></script>
-</body>
+    <script src="php-engine.js"></script>
+    <script src="questions.js"></script>
+    <script src="icons.js"></script>
+    <script src="filesystem.js"></script>
+    <script src="editor-ui.js"></script>
+    <script src="theme.js"></script>
+    <script src="markdown.js"></script>
+    <script src="php-runner.js"></script>
+    <script src="error-lens.js"></script>
+    <script src="tests.js"></script>
+    <script src="debugger.js"></script>
+    <script src="console.js"></script>
+    <script src="php-intellisense.js"></script>
+    <script src="php-format.js"></script>
+  </body>
 </html>
