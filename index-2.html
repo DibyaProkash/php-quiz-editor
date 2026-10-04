@@ -210,6 +210,17 @@
         display: flex;
         flex-direction: column;
       }
+      /* #appRoot wraps the whole app (header/main/footer) so the time-lock veil can
+   cover and `inert` it as one unit. It has to carry the same flex-column
+   sizing `body` used to provide directly, or `main` loses its height
+   constraint, the whole PAGE scrolls instead of just the panels inside it,
+   and the footer status bar scrolls out of view instead of staying pinned. */
+      #appRoot {
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+        min-height: 0;
+      }
 
       /* Skip link: invisible until focused, then jumps a keyboard user straight to the
    code editor without tabbing through the whole file explorer every time. */
@@ -1397,7 +1408,7 @@
      alongside this file). -->
     <script>
       var QUIZ_UNLOCK_AT =
-        "2026-10-05T14:30:00-07:00"; /* Mon Oct 5, 2026, 2:30 PM Pacific (PDT) */
+        null; /* time-lock disabled - set back to an ISO timestamp like '2026-10-05T14:30:00-07:00' to re-enable */
     </script>
     <div id="lockVeil" hidden>
       <div
