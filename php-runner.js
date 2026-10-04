@@ -1,10 +1,15 @@
 const b64 = (s) => btoa(unescape(encodeURIComponent(s)));
+// The Input box as readline()'s lines, the way real PHP sees piped stdin: an empty box
+// is no lines at all (readline() returns false straight away), and a trailing newline
+// ends the last line rather than adding an extra empty one.
+const stdinLines = (s) =>
+  s === "" ? [] : s.replace(/\r\n?/g, "\n").replace(/\n$/, "").split("\n");
 function wrap(code, stdin, r) {
   // Prelude sits on line 1 so PHP error line numbers match the editor.
   const pre =
-    '<?php $__in=explode("\\n",base64_decode("' +
-    b64(stdin) +
-    '"));' +
+    '<?php $__in=json_decode(base64_decode("' +
+    b64(JSON.stringify(stdinLines(stdin))) +
+    '"),true);' +
     'function __rl($p=""){global $__in;echo $p;return count($__in)?array_shift($__in):false;}' +
     '$__r=json_decode(base64_decode("' +
     b64(JSON.stringify(r)) +

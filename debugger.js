@@ -34,14 +34,30 @@ $__pending = null;
 $__prevId = null;
 $__classLike = array(T_CLASS, T_INTERFACE, T_TRAIT);
 if (defined('T_ENUM')) $__classLike[] = T_ENUM;
+// A __cap() call isn't spliced in the instant a ';' is seen - it waits for the next
+// real token, because in a brace-less 'if (...) a; else b;' or 'do a; while (...);'
+// a statement wedged between the ';' and that 'else'/'while' is a parse error.
+$__capAt = null;
+$__capCode = '';
+$__afterDo = false;
+$__bareDo = 0;
 foreach ($__tokens as $__t) {
   if (is_array($__t)) {
     $__id = $__t[0]; $__text = $__t[1]; $__line = $__t[2];
-    if ($__id === T_OPEN_TAG || $__id === T_OPEN_TAG_WITH_ECHO) $__inphp = true;
-    if ($__id === T_CLOSE_TAG) $__inphp = false;
   } else {
     $__text = $__t; $__id = null;
   }
+  if (!in_array($__id, array(T_WHITESPACE, T_COMMENT, T_DOC_COMMENT), true)) {
+    if ($__afterDo) { if ($__text !== '{') $__bareDo++; $__afterDo = false; }
+    if ($__capAt !== null) {
+      if ($__id === T_WHILE && $__bareDo > 0) $__bareDo--;
+      elseif ($__id !== T_ELSE && $__id !== T_ELSEIF) $__out = substr($__out, 0, $__capAt) . $__capCode . substr($__out, $__capAt);
+      $__capAt = null;
+    }
+    if ($__id === T_DO) $__afterDo = true;
+  }
+  if ($__id === T_OPEN_TAG || $__id === T_OPEN_TAG_WITH_ECHO) $__inphp = true;
+  if ($__id === T_CLOSE_TAG) $__inphp = false;
   $__out .= $__text;
   if ($__inphp) {
     $__inClass = count($__classBody) > 0 && end($__classBody);
@@ -64,12 +80,13 @@ foreach ($__tokens as $__t) {
       elseif ($__text === '}') { array_pop($__classBody); }
       elseif ($__text === ';') {
         $__pending = null;
-        if ($__paren === 0 && !$__inClass) $__out .= '__cap(get_defined_vars(),' . $__line . ');';
+        if ($__paren === 0 && !$__inClass) { $__capAt = strlen($__out); $__capCode = '__cap(get_defined_vars(),' . $__line . ');'; }
       }
     }
   }
   $__line += substr_count($__text, "\\n");
 }
+if ($__capAt !== null) $__out = substr($__out, 0, $__capAt) . $__capCode . substr($__out, $__capAt);
 // Always hand back code that ends OUTSIDE of an open PHP tag (closing it here if the
 // student's own file never did) - so wrapDebug() can safely append its own trailing
 // block of PHP code below without caring whether the student's code closed its own
@@ -90,9 +107,9 @@ echo '<<<DBGSRC>>>' . base64_encode($__out);
 // student's own code calls exit()/die(), same as anything else after that point would be.)
 function wrapDebug(instrumentedCode, stdin, r) {
   const pre =
-    '<?php $__in=explode("\\n",base64_decode("' +
-    b64(stdin) +
-    '"));' +
+    '<?php $__in=json_decode(base64_decode("' +
+    b64(JSON.stringify(stdinLines(stdin))) +
+    '"),true);' +
     'function __rl($p=""){global $__in;echo $p;return count($__in)?array_shift($__in):false;}' +
     '$__r=json_decode(base64_decode("' +
     b64(JSON.stringify(r)) +
@@ -131,7 +148,10 @@ async function instrumentSource(src, needsSql) {
       "Could not prepare the code for debugging." +
         (sinkErrs ? " " + sinkErrs : ""),
     );
-  return atob(sinkText.slice(idx + marker.length).trim());
+  // atob() alone yields one JS char per BYTE - decode those bytes as UTF-8, or any
+  // non-ASCII text in the file (é, –, 🎬...) comes back as mojibake like "CafÃ©".
+  const bin = atob(sinkText.slice(idx + marker.length).trim());
+  return new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0)));
 }
 
 // var, not let/const: loadQuestion() (editor-ui.js) calls resetDebugState() - guarded
@@ -241,6 +261,8 @@ function renderDebugStep(i) {
 // Resets the whole panel back to its "hasn't run yet" state - called when switching
 // questions (a trace from a different question's code makes no sense to keep around)
 // and once up front to set up the initial UI.
+// setDebugState() may overwrite the empty-state text, so keep the original to restore.
+var DEBUG_EMPTY_HTML = null;
 function resetDebugState() {
   debugTrace = [];
   debugStep = 0;
@@ -249,6 +271,9 @@ function resetDebugState() {
   $("dbgError").hidden = true;
   $("dbgError").innerHTML = "";
   $("dbgBody").hidden = true;
+  // Loose == on purpose: undefined (not yet null) in a concatenated build - see clearDebugHighlight.
+  if (DEBUG_EMPTY_HTML == null) DEBUG_EMPTY_HTML = $("dbgEmpty").innerHTML;
+  $("dbgEmpty").innerHTML = DEBUG_EMPTY_HTML;
   $("dbgEmpty").hidden = false;
 }
 
