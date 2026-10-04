@@ -25,16 +25,13 @@
 // any other bit of HTML text - and swap the original comment back in afterward. That
 // keeps the exact class of tag that triggered the duplication bug completely out of
 // Prettier's hands, while every real statement still gets fully, properly formatted.
-const PRETTIER_JS = "https://cdn.jsdelivr.net/npm/prettier@3.9.9/standalone.js";
-const PRETTIER_PHP_JS =
-  "https://cdn.jsdelivr.net/npm/@prettier/plugin-php@0.25.0/standalone.js";
+const PRETTIER_JS = 'https://cdn.jsdelivr.net/npm/prettier@3.9.9/standalone.js';
+const PRETTIER_PHP_JS = 'https://cdn.jsdelivr.net/npm/@prettier/plugin-php@0.25.0/standalone.js';
 
 function loadScript(src) {
   return new Promise((resolve, reject) => {
-    const s = document.createElement("script");
-    s.src = src;
-    s.onload = () => resolve();
-    s.onerror = () => reject(new Error("Could not load " + src));
+    const s = document.createElement('script');
+    s.src = src; s.onload = () => resolve(); s.onerror = () => reject(new Error('Could not load ' + src));
     document.head.appendChild(s);
   });
 }
@@ -44,8 +41,7 @@ function ensurePrettier() {
     prettierReady = (async () => {
       try {
         if (!window.prettier) await loadScript(PRETTIER_JS);
-        if (!window.prettierPlugins || !window.prettierPlugins.php)
-          await loadScript(PRETTIER_PHP_JS);
+        if (!window.prettierPlugins || !window.prettierPlugins.php) await loadScript(PRETTIER_PHP_JS);
       } catch (err) {
         // Don't cache a failed load forever - a flaky connection on exam day
         // should get to retry on the next click, not leave Format dead for
@@ -60,17 +56,10 @@ function ensurePrettier() {
 
 let formatMsgTimer = null;
 function showFormatMsg(text, isError) {
-  const el = $("formatMsg");
+  const el = $('formatMsg');
   clearTimeout(formatMsgTimer);
-  el.textContent = text;
-  el.className = isError ? "e" : "ok";
-  el.hidden = false;
-  formatMsgTimer = setTimeout(
-    () => {
-      el.hidden = true;
-    },
-    isError ? 6000 : 2200,
-  );
+  el.textContent = text; el.className = isError ? 'e' : 'ok'; el.hidden = false;
+  formatMsgTimer = setTimeout(() => { el.hidden = true; }, isError ? 6000 : 2200);
 }
 
 // Splits source into alternating {type:'html'|'php', ...} segments on <?php ... ?>
@@ -81,21 +70,13 @@ function splitPhpSegments(text) {
   const segments = [];
   let i = 0;
   while (i < text.length) {
-    const start = text.indexOf("<?php", i);
-    const isPhp = start !== -1 && /^(\s|$)/.test(text.charAt(start + 5) || "");
-    if (!isPhp) {
-      segments.push({ type: "html", text: text.slice(i) });
-      break;
-    }
-    if (start > i) segments.push({ type: "html", text: text.slice(i, start) });
-    const closeIdx = text.indexOf("?>", start + 5);
+    const start = text.indexOf('<?php', i);
+    const isPhp = start !== -1 && /^(\s|$)/.test(text.charAt(start + 5) || '');
+    if (!isPhp) { segments.push({ type: 'html', text: text.slice(i) }); break; }
+    if (start > i) segments.push({ type: 'html', text: text.slice(i, start) });
+    const closeIdx = text.indexOf('?>', start + 5);
     const end = closeIdx === -1 ? text.length : closeIdx + 2;
-    segments.push({
-      type: "php",
-      text: text.slice(start, end),
-      hasClose: closeIdx !== -1,
-      start,
-    });
+    segments.push({ type: 'php', text: text.slice(start, end), hasClose: closeIdx !== -1, start });
     i = end;
   }
   return segments;
@@ -104,37 +85,26 @@ function splitPhpSegments(text) {
 // True when a PHP segment's body is nothing but comments/whitespace - formatting it
 // would have no real effect except risk mangling it, so it's left exactly as written.
 function isCommentOnly(body) {
-  const stripped = body
-    .replace(/\/\*[\s\S]*?\*\//g, "")
-    .replace(/\/\/[^\n]*/g, "")
-    .replace(/#[^\n]*/g, "")
-    .trim();
-  return stripped === "";
+  const stripped = body.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '').replace(/#[^\n]*/g, '').trim();
+  return stripped === '';
 }
 
 // A token Prettier will never try to parse or reformat: it isn't valid PHP or HTML
 // syntax on its own, so it round-trips through formatting completely unchanged,
 // wherever Prettier decides to put whitespace around it.
 const PLACEHOLDER_RE = /\u0000PHPGUARD(\d+)\u0000/g;
-function makePlaceholder(n) {
-  return "\u0000PHPGUARD" + n + "\u0000";
-}
+function makePlaceholder(n) { return '\u0000PHPGUARD' + n + '\u0000'; }
 
 async function formatDocument(source) {
   // Guard every comment-only <?php ?> tag (the exact shape that triggered the
   // duplication bug) behind an inert placeholder before Prettier ever sees the file.
   const segments = splitPhpSegments(source);
   const guards = new Map();
-  let guarded = "";
+  let guarded = '';
   let n = 0;
   for (const seg of segments) {
-    if (seg.type === "html") {
-      guarded += seg.text;
-      continue;
-    }
-    const rawInner = seg.hasClose
-      ? seg.text.slice(5, seg.text.length - 2)
-      : seg.text.slice(5);
+    if (seg.type === 'html') { guarded += seg.text; continue; }
+    const rawInner = seg.hasClose ? seg.text.slice(5, seg.text.length - 2) : seg.text.slice(5);
     if (isCommentOnly(rawInner)) {
       const token = makePlaceholder(n++);
       guards.set(token, seg.text);
@@ -147,32 +117,22 @@ async function formatDocument(source) {
   // lets multi-tag alternate-syntax control structures (if/endif split across two
   // separate <?php ?> tags with HTML in between) parse and format correctly.
   let out = await prettier.format(guarded, {
-    parser: "php",
-    plugins: [prettierPlugins.php],
-    tabWidth: 4,
-    printWidth: 100,
-    singleQuote: true,
-    phpVersion: "8.4",
+    parser: 'php', plugins: [prettierPlugins.php], tabWidth: 4, printWidth: 100, singleQuote: true, phpVersion: '8.4'
   });
   // Swap the guarded comment-only tags back in, byte-for-byte, wherever Prettier
   // ended up placing the placeholder token.
-  out = out.replace(PLACEHOLDER_RE, (_, idx) =>
-    guards.get(makePlaceholder(Number(idx))),
-  );
+  out = out.replace(PLACEHOLDER_RE, (_, idx) => guards.get(makePlaceholder(Number(idx))));
   return out;
 }
 
 async function formatCurrentFile() {
-  const btn = $("format");
-  if (btn.disabled || !cur.endsWith(".php") || !metaOf(cur).editable) return;
+  const btn = $('format');
+  if (btn.disabled || !cur.endsWith('.php') || !metaOf(cur).editable) return;
   btn.disabled = true;
   try {
     await ensurePrettier();
   } catch (err) {
-    showFormatMsg(
-      "Can't format right now: the formatter couldn't load (check your internet connection). Your code hasn't been touched - try again in a moment.",
-      true,
-    );
+    showFormatMsg('Can\'t format right now: the formatter couldn\'t load (check your internet connection). Your code hasn\'t been touched - try again in a moment.', true);
     btn.disabled = false;
     return;
   }
@@ -181,25 +141,15 @@ async function formatCurrentFile() {
     const after = await formatDocument(before);
     if (after !== before) {
       const last = cm.lastLine();
-      cm.replaceRange(
-        after,
-        { line: 0, ch: 0 },
-        { line: last, ch: cm.getLine(last).length },
-        "format",
-      );
-      showFormatMsg("Code formatted.", false);
+      cm.replaceRange(after, { line: 0, ch: 0 }, { line: last, ch: cm.getLine(last).length }, 'format');
+      showFormatMsg('Code formatted.', false);
     } else {
-      showFormatMsg("Already formatted - nothing to change.", false);
+      showFormatMsg('Already formatted - nothing to change.', false);
     }
   } catch (err) {
-    const msg = String((err && err.message) || err).split("\n")[0];
-    showFormatMsg(
-      "Can't format: your PHP has a syntax problem (" +
-        msg +
-        "). Fix it and try again.",
-      true,
-    );
+    const msg = String(err && err.message || err).split('\n')[0];
+    showFormatMsg("Can't format: your PHP has a syntax problem (" + msg + '). Fix it and try again.', true);
   }
   btn.disabled = false;
 }
-$("format").onclick = formatCurrentFile;
+$('format').onclick = formatCurrentFile;
