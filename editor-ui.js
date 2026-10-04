@@ -50,6 +50,17 @@ function hintForCurrentFile(cmInst) {
   return phpHint(cmInst);
 }
 
+// Word wrap: on by default (so a long line never needs horizontal scrolling to
+// read), toggled with Alt-Z like VS Code, and remembered per session like the
+// theme/zoom choices below.
+let wordWrapOn = load("wordWrap");
+wordWrapOn = wordWrapOn === null ? true : wordWrapOn === "1";
+function toggleWordWrap() {
+  wordWrapOn = !wordWrapOn;
+  cm.setOption("lineWrapping", wordWrapOn);
+  store("wordWrap", wordWrapOn ? "1" : "0");
+}
+
 const cm = CodeMirror.fromTextArea($("code"), {
   theme: "material-darker",
   lineNumbers: true,
@@ -64,6 +75,7 @@ const cm = CodeMirror.fromTextArea($("code"), {
   indentWithTabs: false,
   undoDepth: 1000,
   historyEventDelay: 400,
+  lineWrapping: wordWrapOn,
   extraKeys: {
     "Ctrl-Enter": () => runFresh(),
     "Cmd-Enter": () => runFresh(),
@@ -73,6 +85,7 @@ const cm = CodeMirror.fromTextArea($("code"), {
     "Shift-Alt-F": () => formatCurrentFile(),
     "Ctrl-/": toggleLineComment,
     "Cmd-/": toggleLineComment,
+    "Alt-Z": () => toggleWordWrap(),
   },
 });
 // Screen readers otherwise announce CodeMirror's hidden input with no name at all.
