@@ -215,7 +215,7 @@ const MOVIE_VALIDATION_FUNCS = [
     sig: "htmlspecialchars(string $string): string",
     desc: "Escapes a value before echoing it back into the page, so a name or message a visitor typed in can never be interpreted as HTML/script.",
     example:
-      "htmlspecialchars($name)\nhtmlspecialchars('<b>Hi</b> & \"bye\"')\n// '&lt;b&gt;Hi&lt;/b&gt; &amp; &quot;bye&quot;'",
+      "htmlspecialchars($name)\nhtmlspecialchars('<script>alert(1)</script>')\n// '&lt;script&gt;alert(1)&lt;/script&gt;'",
   },
 ];
 
