@@ -22,7 +22,10 @@ function clearErrorLens() {
     const doc = docs[name];
     if (!doc) return;
     (doc.lensMarks || []).forEach(m => m.clear());
-    (doc.lensLines || []).forEach(line => { try { doc.removeLineClass(line, 'background'); } catch (e) {} });
+    // Each entry is the line HANDLE addLineClass returned, which follows its line through
+    // edits (a plain line number would go stale), plus just our own class - so other
+    // background classes, like the debugger's dbgLine highlight, are left alone.
+    (doc.lensLines || []).forEach(l => { try { doc.removeLineClass(l.handle, 'background', l.cls); } catch (e) {} });
     doc.lensMarks = []; doc.lensLines = [];
   });
   lensDocs.clear();
@@ -31,8 +34,10 @@ function clearErrorLens() {
 // `\S+` alone can't match the virtual "php-wasm run script" name (it has spaces), so
 // that exact phrase is matched as its own alternative ahead of the generic no-spaces case.
 const LENS_FILE = 'php-wasm run script|\\S+';
-const LENS_LINE_RE = new RegExp('(Parse error|Warning|Notice|Deprecated):\\s*(.*?)\\s+in\\s+(' + LENS_FILE + ')\\s+on\\s+line\\s+(\\d+)', 'g');
-const LENS_FATAL_RE = new RegExp('Fatal error:\\s*(.*?)\\s+in\\s+(' + LENS_FILE + '):(\\d+)', 'g');
+// Fatal errors come in two shapes: compile-time ones ("Cannot redeclare ...") use the
+// usual "in X on line N" form above; uncaught exceptions use "Uncaught ... in X:N".
+const LENS_LINE_RE = new RegExp('(Parse error|Fatal error|Warning|Notice|Deprecated):\\s*(.*?)\\s+in\\s+(' + LENS_FILE + ')\\s+on\\s+line\\s+(\\d+)', 'g');
+const LENS_FATAL_RE = new RegExp('Fatal error:\\s*(Uncaught .*?)\\s+in\\s+(' + LENS_FILE + '):(\\d+)', 'g');
 const LENS_CLASS = { 'Parse error': 'lens-error', 'Fatal error': 'lens-error', Warning: 'lens-warning', Notice: 'lens-notice', Deprecated: 'lens-notice' };
 
 // Maps a path PHP reported (e.g. "/helper.php", or the "php-wasm run script" stand-in
@@ -53,13 +58,13 @@ function addLensDiag(fileKey, line0, severity, message, seen) {
   if (seen.has(dedupeKey)) return;
   seen.add(dedupeKey);
   const cls = LENS_CLASS[severity] || 'lens-error';
-  doc.addLineClass(line0, 'background', cls + '-line');
+  const handle = doc.addLineClass(line0, 'background', cls + '-line');
   const span = document.createElement('span');
   span.className = 'lens-msg ' + cls;
   span.textContent = '  // ' + severity + ': ' + message;
   const mark = doc.setBookmark({ line: line0, ch: doc.getLine(line0).length }, { widget: span, insertLeft: false });
   (doc.lensMarks || (doc.lensMarks = [])).push(mark);
-  (doc.lensLines || (doc.lensLines = [])).push(line0);
+  (doc.lensLines || (doc.lensLines = [])).push({ handle, cls: cls + '-line' });
   lensDocs.add(fileKey);
 }
 

@@ -11,7 +11,8 @@
 // How the instrumentation works: a small PHP script (INSTRUMENTER_PHP) tokenizes the
 // student's code with token_get_all() and, after every statement-ending ';' token
 // that ISN'T inside a for(...)'s own parentheses (paren depth is tracked so
-// `for ($i=0; $i<10; $i++)` is left alone), splices in a call to __cap(), which
+// `for ($i=0; $i<10; $i++)` is left alone) and isn't a declaration directly inside a
+// class body (brace depth is tracked too), splices in a call to __cap(), which
 // records get_defined_vars() - called at that exact point in that exact scope, so it
 // always captures the right variables. Because this only ever APPENDS a harmless new
 // statement right after an existing one, it can't break the surrounding code's
@@ -24,6 +25,15 @@ $__out = '';
 $__paren = 0;
 $__inphp = false;
 $__line = 1;
+// One entry per open '{': true when it opened a class/interface/trait/enum body, where
+// only declarations (properties, constants, abstract methods) may appear - a __cap()
+// call there is a parse error, so nothing is spliced in until a method body opens.
+// $__pending remembers whether the NEXT '{' belongs to a class-like or a function.
+$__classBody = array();
+$__pending = null;
+$__prevId = null;
+$__classLike = array(T_CLASS, T_INTERFACE, T_TRAIT);
+if (defined('T_ENUM')) $__classLike[] = T_ENUM;
 foreach ($__tokens as $__t) {
   if (is_array($__t)) {
     $__id = $__t[0]; $__text = $__t[1]; $__line = $__t[2];
@@ -33,10 +43,30 @@ foreach ($__tokens as $__t) {
     $__text = $__t; $__id = null;
   }
   $__out .= $__text;
-  if ($__inphp && $__id === null) {
-    if ($__text === '(') { $__paren++; }
-    elseif ($__text === ')') { if ($__paren > 0) $__paren--; }
-    elseif ($__text === ';' && $__paren === 0) { $__out .= '__cap(get_defined_vars(),' . $__line . ');'; }
+  if ($__inphp) {
+    $__inClass = count($__classBody) > 0 && end($__classBody);
+    if ($__id !== null) {
+      // Foo::class is a constant lookup, not a class declaration.
+      if (in_array($__id, $__classLike, true) && $__prevId !== T_DOUBLE_COLON) $__pending = 'class';
+      elseif ($__id === T_FUNCTION) $__pending = 'func';
+      elseif ($__id === T_CURLY_OPEN || $__id === T_DOLLAR_OPEN_CURLY_BRACES) $__classBody[] = $__inClass;
+      if (!in_array($__id, array(T_WHITESPACE, T_COMMENT, T_DOC_COMMENT), true)) $__prevId = $__id;
+    } else {
+      $__prevId = null;
+      if ($__text === '(') { $__paren++; }
+      elseif ($__text === ')') { if ($__paren > 0) $__paren--; }
+      elseif ($__text === '{') {
+        // A brace that is neither a class nor a function body (if/while/match, or a
+        // trait-adaptation/property-hook block inside a class) keeps its parent's context.
+        $__classBody[] = $__pending === 'class' ? true : ($__pending === 'func' ? false : $__inClass);
+        $__pending = null;
+      }
+      elseif ($__text === '}') { array_pop($__classBody); }
+      elseif ($__text === ';') {
+        $__pending = null;
+        if ($__paren === 0 && !$__inClass) $__out .= '__cap(get_defined_vars(),' . $__line . ');';
+      }
+    }
   }
   $__line += substr_count($__text, "\\n");
 }
@@ -315,8 +345,11 @@ async function runDebug() {
     if (QUESTIONS[key].preview) {
       const previewScale =
         (typeof zoomPct !== "undefined" ? zoomPct : 100) / 100;
+      // Same as run(): a fresh page gets a fresh console, and BRIDGE must go in first.
+      if (typeof resetConsolePanel === "function") resetConsolePanel();
+      $("navNote").hidden = true; // Debug always runs the main file, never a followed link
       $("frame").srcdoc = injectZoomStyle(
-        inline(output) + BRIDGE,
+        injectBridge(inline(output)),
         previewScale,
       );
     }

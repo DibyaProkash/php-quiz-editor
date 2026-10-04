@@ -1,33 +1,3 @@
-// VS Code's Ctrl+/ (toggle line comment): comments out every non-blank line in the
-// selection with '//', or uncomments them if they're already all commented. Comments
-// only apply to editable files - CSS's read-only style.css never needs this, but the
-// check is (ext === 'css') below in case a student ever adds their own .css file.
-function toggleLineComment(cmInst) {
-  const ext = cur.split('.').pop();
-  const marker = ext === 'css' ? null : '// ';
-  const from = cmInst.getCursor('from'), to = cmInst.getCursor('to');
-  const lastLine = (to.ch === 0 && to.line > from.line) ? to.line - 1 : to.line;
-  if (!marker) return; // (block-comment toggling for CSS isn't needed by this app; skip rather than mangle)
-  let allCommented = true;
-  for (let l = from.line; l <= lastLine; l++) {
-    const text = cmInst.getLine(l);
-    if (text.trim() !== '' && !/^\s*\/\//.test(text)) { allCommented = false; break; }
-  }
-  cmInst.operation(() => {
-    for (let l = from.line; l <= lastLine; l++) {
-      const text = cmInst.getLine(l);
-      if (allCommented) {
-        const m = /^(\s*)\/\/ ?/.exec(text);
-        if (m) cmInst.replaceRange('', CodeMirror.Pos(l, m[1].length), CodeMirror.Pos(l, m[0].length));
-      } else {
-        if (text.trim() === '') continue; // leave blank lines blank
-        const indent = /^\s*/.exec(text)[0];
-        cmInst.replaceRange(marker, CodeMirror.Pos(l, indent.length));
-      }
-    }
-  });
-}
-
 // Ctrl-Space's autocomplete source depends on what kind of file is open - PHP code gets
 // the custom phpHint source (php-intellisense.js), while .html/.css/.js files get
 // CodeMirror's own built-in hint sources for those languages (loaded in index.html),
@@ -60,10 +30,15 @@ const cm = CodeMirror.fromTextArea($('code'), {
   indentUnit: 4, indentWithTabs: false, undoDepth: 1000, historyEventDelay: 400,
   lineWrapping: wordWrapOn,
   extraKeys: {
-    'Ctrl-Enter': () => runFresh(), 'Cmd-Enter': () => runFresh(), Tab: c => c.replaceSelection('    '),
+    'Ctrl-Enter': () => runFresh(), 'Cmd-Enter': () => runFresh(),
+    // Like VS Code: a selection spanning lines is indented as a block, not replaced.
+    Tab: c => c.listSelections().some(r => r.anchor.line !== r.head.line) ? c.indentSelection('add') : c.replaceSelection('    '),
     'Ctrl-Space': c => CodeMirror.showHint(c, hintForCurrentFile, { completeSingle: false }),
     'Shift-Alt-F': () => formatCurrentFile(),
-    'Ctrl-/': toggleLineComment, 'Cmd-/': toggleLineComment,
+    // VS Code's Ctrl+/ - the comment addon (index.html) picks the syntax for the language
+    // under the cursor: // in PHP code, <!-- --> in HTML (even inside a .php file), /* */
+    // in CSS, and does nothing in .md/.txt/.json, which have no comment syntax.
+    'Ctrl-/': 'toggleComment', 'Cmd-/': 'toggleComment',
     'Alt-Z': () => toggleWordWrap()
   }
 });

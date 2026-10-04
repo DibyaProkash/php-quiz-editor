@@ -1,5 +1,7 @@
 let PhpWeb = null;
-const phpReady = import("https://cdn.jsdelivr.net/npm/php-wasm/PhpWeb.mjs")
+// Pinned, like every other CDN dependency here, so a new upstream release can't change
+// the PHP engine under students mid-exam. Bump deliberately, after testing.
+const phpReady = import("https://cdn.jsdelivr.net/npm/php-wasm@0.2.0/PhpWeb.mjs")
   .then((m) => {
     PhpWeb = m.PhpWeb;
   })

@@ -68,7 +68,7 @@ function resolveNavTarget(href) {
 // bare fragment with neither tag (common for a simple echo-only PHP page) gets it
 // prepended directly, since there's no doctype there to protect.
 function injectBridge(html) {
-  if (/<head[^>]*>/i.test(html)) return html.replace(/<head[^>]*>/i, m => m + BRIDGE);
+  if (/<head(\s[^>]*)?>/i.test(html)) return html.replace(/<head(\s[^>]*)?>/i, m => m + BRIDGE);
   if (/<html[^>]*>/i.test(html)) return html.replace(/<html[^>]*>/i, m => m + BRIDGE);
   return BRIDGE + html;
 }
@@ -83,19 +83,18 @@ function injectBridge(html) {
 function injectZoomStyle(html, scale) {
   if (scale === 1) return html;
   const tag = '<style>html{zoom:' + scale + '}</style>';
-  if (/<head[^>]*>/i.test(html)) return html.replace(/<head[^>]*>/i, m => m + tag);
+  if (/<head(\s[^>]*)?>/i.test(html)) return html.replace(/<head(\s[^>]*)?>/i, m => m + tag);
   if (/<html[^>]*>/i.test(html)) return html.replace(/<html[^>]*>/i, m => m + tag);
   return tag + html; // a fragment with no <html>/<head> tag - a stray <style> still applies
 }
 
 function inline(html) {
   allNames().forEach(name => {
-    const f = { name };
     if (name.endsWith('.php')) return;
     const code = docs[name].getValue(), n = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    if (f.name.endsWith('.css'))
+    if (name.endsWith('.css'))
       html = html.replace(new RegExp('<link[^>]*href=["\'](?:\\./)?' + n + '["\'][^>]*>', 'gi'), () => '<style>' + code + '</style>');
-    if (f.name.endsWith('.js'))
+    if (name.endsWith('.js'))
       html = html.replace(new RegExp('<script[^>]*src=["\'](?:\\./)?' + n + '["\'][^>]*>\\s*<\\/script>', 'gi'),
         () => '<script>window.addEventListener("DOMContentLoaded",function(){' + code.replace(/<\/script/gi, '<\\/script') + '\n});<\/script>');
   });
@@ -175,6 +174,7 @@ async function run() {
   $('out').innerHTML = (flagged ? '<span class="e">' + esc(text) + (errs ? '\n' + esc(errs) : '') + '</span>' : esc(text)) ||
     '<span class="m">(no output)</span>';
   if (typeof applyErrorLens === 'function') flagged ? applyErrorLens(text + (errs ? '\n' + errs : ''), main) : clearErrorLens();
+  if (!q.preview) view('out'); // otherwise a Run from the Debugger/Console tab shows nothing
   if (q.preview) {
     // Switch to the Preview tab BEFORE writing the new page into the iframe, not
     // after. Setting srcdoc while the iframe is still hidden (display:none, from

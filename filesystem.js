@@ -122,8 +122,10 @@ function checkPath(path, isFolder, ignore) {
   }
   if (!isFolder) {
     const b = baseOf(path);
-    if (!b.includes(".") || !ALLOWED.includes(b.split(".").pop().toLowerCase()))
-      return "The name must end in .php, .css, .js, .html, .txt, .json or .md";
+    // Case-sensitive on purpose: the rest of the app checks e.g. endsWith(".php"), so a
+    // "Helper.PHP" would otherwise be accepted here but never treated as PHP.
+    if (!b.includes(".") || !ALLOWED.includes(b.split(".").pop()))
+      return "The name must end in .php, .css, .js, .html, .txt, .json or .md (lowercase)";
   }
   const inIgnored = (n) =>
     ignore && (n === ignore || n.startsWith(ignore + "/"));
