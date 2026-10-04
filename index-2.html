@@ -2218,12 +2218,18 @@ if ($submitted) {
 
     }
 
-    $matchCount = count($matches); // TODO
+    // TODO: $matchCount = count($matches);
+
 
     // $10.00 per matching movie, with a 20% "combo deal" once 3 or more match.
-    $subtotal = $matchCount * 10.00; // TODO
-    $discount = $matchCount >= 3 ? $subtotal * 0.20 : 0; // TODO
-    $final = $subtotal - $discount; // TODO
+    // TODO: $subtotal = $matchCount * 10.00;
+
+
+    // TODO: $discount = $matchCount >= 3 ? $subtotal * 0.20 : 0;
+
+
+    // TODO: $final = $subtotal - $discount;
+
 }
 ?>
 <!DOCTYPE html>
@@ -2382,22 +2388,32 @@ $familyOnly = false;
 
 $matches = [];
 foreach ($movies as $movie) {
-    $keywordOk = $keyword === '' || stripos($movie['title'], $keyword) !== false; // TODO
-    $genreOk   = $genre === 'All' || $movie['genre'] === $genre;                  // TODO
-    $familyOk  = !$familyOnly || $movie['family'] === true;                       // TODO
+    // TODO: $keywordOk = true when $keyword is blank, OR the movie's title contains it (stripos)
+
+
+    // TODO: $genreOk = true when $genre is 'All', OR it matches the movie's own genre
+
+
+    // TODO: $familyOk = true when $familyOnly is false, OR the movie itself is family-friendly
+
+
     if ($keywordOk && $genreOk && $familyOk) {
         $matches[] = $movie;
     }
 }
 
-$matchCount = count($matches); // TODO
+// TODO: $matchCount = count($matches);
+
 $subtotal = 0;
 foreach ($matches as $movie) {
     // TODO: $subtotal += $movie['price'];
 
 }
-$discount = $matchCount >= 2 ? $subtotal * 0.10 : 0; // TODO - "double feature" 10% off for 2+ results
-$final = $subtotal - $discount; // TODO
+// TODO: $discount = $matchCount >= 2 ? $subtotal * 0.10 : 0; ("double feature" 10% off for 2+ results)
+
+
+// TODO: $final = $subtotal - $discount;
+
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -2548,7 +2564,8 @@ if ($submitted) {
     // TODO: push $vipQty new Ticket('vip') objects onto $tickets
 
 
-    $ticketCount = count($tickets); // TODO
+    // TODO: $ticketCount = count($tickets);
+
 
     $subtotal = 0;
     foreach ($tickets as $ticket) {
@@ -2556,8 +2573,11 @@ if ($submitted) {
 
     }
 
-    $discount = $ticketCount >= 6 ? $subtotal * 0.10 : 0; // TODO - 10% group discount for 6+ tickets
-    $final = $subtotal - $discount; // TODO
+    // TODO: $discount = $ticketCount >= 6 ? $subtotal * 0.10 : 0; (10% group discount for 6+ tickets)
+
+
+    // TODO: $final = $subtotal - $discount;
+
 }
 ?>
 <!DOCTYPE html>
@@ -2702,7 +2722,8 @@ if ($submitted) {
     // TODO: $discountAmount = $subtotal * $discountPct / 100, rounded to 2 decimals (round)
     $discountAmount = 0;
 
-    $final = $subtotal - $discountAmount; // TODO
+    // TODO: $final = $subtotal - $discountAmount;
+
 }
 ?>
 <!DOCTYPE html>
@@ -2770,12 +2791,27 @@ if ($submitted) {
               input: { name: "Sam", quantity: "1", terms: "yes" },
               expectFinal: "10.00",
             },
+            {
+              label: 'Invalid: name too short ("A")',
+              input: { name: "A", quantity: "3", terms: "yes" },
+              expectFinal: "0.00",
+            },
+            {
+              label: "Invalid: quantity out of range (15)",
+              input: { name: "Alex", quantity: "15", terms: "yes" },
+              expectFinal: "0.00",
+            },
+            {
+              label: "Invalid: terms not checked",
+              input: { name: "Alex", quantity: "3" },
+              expectFinal: "0.00",
+            },
           ],
           hints: [
             "Name: if (strlen($name) < 2 || strlen($name) > 40) { $errors['name'] = 'Name must be 2-40 characters'; }",
             "Quantity: if (!is_numeric($quantity) || $quantity < 1 || $quantity > 10) { $errors['quantity'] = '...'; }",
             "Terms: if (!$terms) { $errors['terms'] = 'You must agree to the terms'; }",
-            "$invalid = implode($errors); - an empty array implodes to '' (falsy), so `if (!$invalid)` means \"no errors\".",
+            "An empty $errors array implodes to '' (falsy), so `if (!$invalid)` means \"no errors\" - think about what implode() does to turn $errors into $invalid.",
           ],
           files: [
             {
@@ -2792,13 +2828,13 @@ Fill in the \`// TODO\` sections in \`index.php\`:
 1. **Validate \`$name\`**: it must be **2 to 40 characters** (\`strlen\`). If not, set \`$errors['name']\` to a message.
 2. **Validate \`$quantity\`**: it must be numeric (\`is_numeric\`) **and** between **1 and 10**. If not, set \`$errors['quantity']\`.
 3. **Validate \`$terms\`**: the checkbox must have been checked (\`$terms\` is already computed for you). If it's \`false\`, set \`$errors['terms']\`.
-4. \`$invalid = implode($errors);\` - exactly like the slides: an **empty** \`$errors\` array implodes to \`''\`, which is falsy, so \`if (!$invalid)\` means "nothing went wrong."
+4. **Combine the errors**: \`$invalid\` should end up \`''\` (falsy) when \`$errors\` is empty, and non-empty when it isn't - exactly like the slides' \`implode($errors)\` pattern.
 5. Only when there are no errors, calculate \`$final = $ticketPrice * (int) $quantity;\`
 
-If there *are* errors, the page already shows them back to the student (each one escaped with \`htmlspecialchars\`) instead of a receipt - you don't need to touch that part, just make sure \`$errors\` ends up with the right messages in it.
+If there *are* errors, the page already shows them back to the student (each one escaped with \`htmlspecialchars\`) above the receipt - you don't need to touch that part, just make sure \`$errors\` (and then \`$invalid\`) end up right. The receipt row always appears once the form is submitted, but it stays **$0.00** whenever there are errors, since nothing was actually booked.
 
 ## Testing your code
-Open the **Tests** tab and click **Run tests** - all three official tests use valid input (the Tests tab always checks for a final dollar amount), including both edge cases of the ticket-quantity range (1 and 10). Try submitting an invalid name, quantity, or an unchecked box yourself with the **Run** button to see your error messages appear.
+Open the **Tests** tab and click **Run tests**. Unlike the other parts, this one's 6 tests are **not** all meant to succeed in booking: 3 use valid input and expect a real dollar total, and 3 use *invalid* input (a too-short name, an out-of-range quantity, an unchecked box) and expect **$0.00** - because correctly-written validation should reject them. If your validation isn't right, one of those three will show a real dollar amount instead of $0.00.
 
 ## Files in this project
 | File | Can I edit it? |
@@ -2839,10 +2875,12 @@ if ($submitted) {
     // TODO: if $terms is false, set $errors['terms'] = 'You must agree to the terms';
 
 
-    $invalid = implode($errors); // TODO
+    // TODO: $invalid = implode($errors);
+
 
     if (!$invalid) {
-        $final = $ticketPrice * (int) $quantity; // TODO
+        // TODO: $final = $ticketPrice * (int) $quantity;
+
     }
 }
 ?>
@@ -2874,7 +2912,8 @@ if ($submitted) {
         <?php endforeach; ?>
       </ul>
     </div>
-    <?php elseif ($submitted): ?>
+    <?php endif; ?>
+    <?php if ($submitted): ?>
     <table class="receipt">
       <tr><th>Booked by</th><td><?php echo htmlspecialchars($name); ?></td></tr>
       <tr><th>Tickets</th><td><?php echo (int) $quantity; ?></td></tr>
