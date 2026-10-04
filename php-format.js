@@ -42,9 +42,17 @@ let prettierReady = null;
 function ensurePrettier() {
   if (!prettierReady) {
     prettierReady = (async () => {
-      if (!window.prettier) await loadScript(PRETTIER_JS);
-      if (!window.prettierPlugins || !window.prettierPlugins.php)
-        await loadScript(PRETTIER_PHP_JS);
+      try {
+        if (!window.prettier) await loadScript(PRETTIER_JS);
+        if (!window.prettierPlugins || !window.prettierPlugins.php)
+          await loadScript(PRETTIER_PHP_JS);
+      } catch (err) {
+        // Don't cache a failed load forever - a flaky connection on exam day
+        // should get to retry on the next click, not leave Format dead for
+        // the rest of the session.
+        prettierReady = null;
+        throw err;
+      }
     })();
   }
   return prettierReady;
@@ -160,6 +168,15 @@ async function formatCurrentFile() {
   btn.disabled = true;
   try {
     await ensurePrettier();
+  } catch (err) {
+    showFormatMsg(
+      "Can't format right now: the formatter couldn't load (check your internet connection). Your code hasn't been touched - try again in a moment.",
+      true,
+    );
+    btn.disabled = false;
+    return;
+  }
+  try {
     const before = cm.getValue();
     const after = await formatDocument(before);
     if (after !== before) {
