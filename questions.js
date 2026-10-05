@@ -401,13 +401,13 @@ if ($submitted) {
 ## What to build
 Fill in the \`// TODO\` sections in \`index.php\`:
 
-1. Lowercase the submitted \`$keyword\` (it's already trimmed for you) with \`strtolower\`.
+1. Make the submitted \`$keyword\` (already trimmed for you) lowercase, so the search doesn't care about capitalization.
 2. Inside the loop over \`$rawTitles\`, for each \`$raw\`:
    - \`$clean\` - a trimmed, lowercased version (for comparing).
-   - \`$display\` - a nicely capitalized version for showing on screen (\`ucwords\` on the cleaned-up lowercase string).
-   - If \`$keyword\` isn't blank **and** \`$clean\` contains \`$keyword\` (\`str_contains\`), add \`$display\` to \`$matches\`.
-3. \`$matchCount = count($matches);\`
-4. Pricing: **$10.00 per matching movie**, with a **20% "combo deal" discount** once **3 or more** movies match (reuse the if/else discount pattern from the Café questions).
+   - \`$display\` - a nicely capitalized version of \`$clean\` (every word starting with a capital letter), for showing on screen.
+   - A title is a match only when \`$keyword\` isn't blank **and** it appears somewhere inside \`$clean\`. Add each match's \`$display\` version to \`$matches\`.
+3. \`$matchCount\` - how many titles ended up in \`$matches\`.
+4. Pricing: **$10.00 per matching movie**, with a **20% "combo deal" discount** once **3 or more** movies match (the same two-branch discount logic as the Café questions).
 
 ## Testing your code
 Open the **Tests** tab and click **Run tests**.
@@ -593,7 +593,7 @@ Fill in the \`// TODO\` sections in \`index.php\`:
 Pricing: each matching movie's price is added to the subtotal, with a **10% "double feature" discount** once **2 or more** movies match.
 
 ## Testing your code
-Open the **Tests** tab and click **Run tests**. One of the tests submits an invalid genre on purpose, to check that your \`in_array\` fallback actually works.
+Open the **Tests** tab and click **Run tests**. One of the tests submits an invalid genre on purpose, to check that your genre fallback actually works.
 
 ## Files in this project
 | File | Can I edit it? |
@@ -923,7 +923,7 @@ Fill in the \`// TODO\` sections in \`index.php\`:
 4. **Calculate**: the subtotal is straightforward (tickets × price), and the discount amount is that percentage of the subtotal - rounded to 2 decimal places, since it's money - subtracted for \`$final\`.
 
 ## Why validate the format first?
-If you only checked \`array_key_exists\`, a code like \`"<script>"\` would just quietly fail the lookup - harmless here, but in a real app you always want to reject obviously-wrong input with a clear rule (the regex) before you even check it against real data.
+If you only checked whether the code exists in \`$promoCodes\`, a code like \`"<script>"\` would just quietly fail the lookup - harmless here, but in a real app you always want to reject obviously-wrong input with a clear rule (the regex) before you even check it against real data.
 
 ## Testing your code
 Open the **Tests** tab and click **Run tests** - it checks a valid code, an invalid-format code, no code at all, and a second valid code.
