@@ -648,17 +648,17 @@ foreach ($movies as $movie) {
     }
 }
 
-// TODO: $matchCount = count($matches);
+// TODO: $matchCount - how many movies ended up in $matches
 
 $subtotal = 0;
 foreach ($matches as $movie) {
-    // TODO: $subtotal += $movie['price'];
+    // TODO: add this movie's price into $subtotal
 
 }
-// TODO: $discount = $matchCount >= 2 ? $subtotal * 0.10 : 0; ("double feature" 10% off for 2+ results)
+// TODO: $discount - 10% of $subtotal once $matchCount is 2 or more ("double feature"), otherwise no discount
 
 
-// TODO: $final = $subtotal - $discount;
+// TODO: $final - the subtotal with the discount taken off
 
 ?>
 <!DOCTYPE html>
