@@ -29,6 +29,8 @@ const MEDIA_TYPES = {
   svg: "image/svg+xml", pdf: "application/pdf", txt: "text/plain", csv: "text/csv", log: "text/plain",
   json: "application/json", html: "text/html", md: "text/markdown",
 };
+// esc() (filesystem.js) only covers text; this one is safe inside a quoted attribute too.
+const escAttr = (s) => esc(String(s)).replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 const mediaTypeOf = (n) => MEDIA_TYPES[n.split(".").pop().toLowerCase()] || "application/octet-stream";
 const DOWNLOAD_SVG =
   '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>';
@@ -194,6 +196,39 @@ async function loadMedia() {
 const mediaIn = (dir) => [...media.keys()].filter((n) => dirOf(n) === dir).sort((a, b) => a.localeCompare(b));
 
 // ---------- the PHP engine's copy ----------
+// Makes the engine's files match the project exactly before a run. The engine's
+// filesystem outlives a run (refresh() keeps it), so without this a renamed or deleted
+// file would still be include-able, files a test's code saved would turn up as the
+// student's own, and one question's files would be visible from the next.
+async function unlinkIfExists(engine, path) {
+  try {
+    const a = await engine.analyzePath(path);
+    if (a && a.exists && !(a.object && a.object.isFolder)) await engine.unlink(path);
+  } catch (e) {}
+}
+async function syncProjectFiles(engine) {
+  const st = engine.__proj || (engine.__proj = { files: new Set(), dirs: new Set() }),
+    names = allNames(),
+    keep = new Set(names.concat([...media.keys()])),
+    dirs = allFolders();
+  for (const n of st.files) if (!keep.has(n)) await unlinkIfExists(engine, "/" + n);
+  for (const d of new Set([...dirs, ...st.dirs])) {
+    let entries;
+    try {
+      const a = await engine.analyzePath("/" + d);
+      if (!a || !a.exists) continue;
+      entries = await engine.readdir("/" + d);
+    } catch (e) {
+      continue;
+    }
+    for (const e of entries) if (e !== "." && e !== ".." && !keep.has(d + "/" + e)) await unlinkIfExists(engine, "/" + d + "/" + e);
+  }
+  for (const d of dirs) await ensureDir(engine, "/" + d);
+  for (const n of names) await engine.writeFile("/" + n, n.endsWith(".php") ? fix(docs[n].getValue()) : docs[n].getValue());
+  st.files = new Set(names.concat([...media.keys()]));
+  st.dirs = new Set(dirs);
+  await writeMedia(engine);
+}
 async function writeMedia(engine) {
   for (const n of mediaDeleted) {
     try {
@@ -299,13 +334,32 @@ function downloadMedia(n) {
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
-function deleteMedia(n) {
+function forgetMedia(n) {
   media.delete(n);
   mediaDeleted.add(n);
   store("mf:" + key + ":" + n);
+}
+function deleteMedia(n) {
+  forgetMedia(n);
   saveMediaIndex();
   if (mediaCur === n) showFile(cur);
   else renderTabs();
+}
+// Folder delete/rename in the explorer (filesystem.js) take the files the student's code
+// saved inside with them. Sample files belong to the question and stay where they are.
+function deleteSavedUnder(dir) {
+  for (const [n, m] of [...media]) if (m.kind === "saved" && n.startsWith(dir + "/")) forgetMedia(n);
+  saveMediaIndex();
+}
+function moveSavedUnder(from, to) {
+  for (const [n, m] of [...media]) {
+    if (m.kind !== "saved" || !n.startsWith(from + "/")) continue;
+    const nn = to + n.slice(from.length);
+    forgetMedia(n);
+    media.set(nn, m);
+    saveMediaFile(nn);
+  }
+  saveMediaIndex();
 }
 function hideMedia() {
   mediaCur = "";
@@ -330,7 +384,7 @@ function showMedia(n) {
   mediaUrl = URL.createObjectURL(new Blob([m.bytes], { type: m.type }));
   const where = m.kind === "sample" ? "Sample file for this exercise" : "Saved by your PHP code";
   let body;
-  if (m.type.startsWith("image/")) body = '<div class="mediaImg"><img id="mediaImg" alt="' + esc(baseOf(n)) + '" src="' + mediaUrl + '"></div>';
+  if (m.type.startsWith("image/")) body = '<div class="mediaImg"><img id="mediaImg" alt="' + escAttr(baseOf(n)) + '" src="' + mediaUrl + '"></div>';
   else if (m.type.startsWith("text/") || m.type === "application/json") {
     const t = new TextDecoder().decode(m.bytes.subarray(0, 20000));
     body = '<pre class="mediaText">' + esc(t) + (m.bytes.length > 20000 ? "\n…" : "") + "</pre>";

@@ -4,53 +4,59 @@ const b64 = (s) => btoa(unescape(encodeURIComponent(s)));
 // ends the last line rather than adding an extra empty one.
 const stdinLines = (s) =>
   s === "" ? [] : s.replace(/\r\n?/g, "\n").replace(/\n$/, "").split("\n");
-function wrap(code, stdin, r) {
-  // `up` holds upload bytes for prepareWebRequest() (web-state.js) - never serialized here.
-  const { up, ...rq } = r;
-  // Prelude sits on line 1 so PHP error line numbers match the editor.
-  const pre =
-    '<?php $__in=json_decode(base64_decode("' +
+// The request setup that runs before the student's code: the Input box for readline(),
+// $_GET/$_POST/$_REQUEST, and cookies/sessions/uploads (WEB_PRELUDE, web-state.js). One
+// line with no newlines, so PHP's error line numbers keep matching the editor. Form data
+// comes as the browser's own query string when there is one, so PHP's parse_str() builds
+// name[] and name[key] arrays exactly the way a real request would.
+function requestPrelude(stdin, rq) {
+  return (
+    '$__in=json_decode(base64_decode("' +
     b64(JSON.stringify(stdinLines(stdin))) +
     '"),true);' +
     'function __rl($p=""){global $__in;echo $p;return count($__in)?array_shift($__in):false;}' +
     '$__r=json_decode(base64_decode("' +
     b64(JSON.stringify(rq)) +
     '"),true);' +
-    'if($__r["m"]==="post"){$_POST=$__r["d"];$_SERVER["REQUEST_METHOD"]="POST";}else{$_GET=$__r["d"];$_SERVER["REQUEST_METHOD"]="GET";}' +
-    '$_REQUEST=$__r["d"];' +
-    WEB_PRELUDE + // cookies, sessions, uploads - see web-state.js
-    'unset($__r); ?>';
-  const body = fix(code);
-  return pre + body + webTrailer(body);
+    '$__d=isset($__r["q"])?(function($s){parse_str($s,$o);return $o;})($__r["q"]):$__r["d"];' +
+    'if($__r["m"]==="post"){$_POST=$__d;$_GET=isset($__r["gq"])?(function($s){parse_str($s,$o);return $o;})($__r["gq"]):[];$_SERVER["REQUEST_METHOD"]="POST";}' +
+    'else{$_GET=$__d;$_SERVER["REQUEST_METHOD"]="GET";}' +
+    '$_REQUEST=array_merge($_GET,$_POST);unset($__d);' +
+    WEB_PRELUDE
+  );
 }
-// Source rewrites applied to every .php file before it runs. readline()/fgets(STDIN) read
-// the Input box. The upload functions and exit/die go to web-state.js's stand-ins (the
-// real move_uploaded_file() only accepts files PHP's own HTTP upload parser received,
-// and exit/die must save cookies and the session first). Each rewrite stays on the same
-// line, so error line numbers don't move. The lookbehind skips method calls and names
-// like $obj->exit( or Foo::die(.
-const fix = (code) =>
-  code
-    .replace(/\breadline\s*\(/g, "__rl(")
-    .replace(/\bfgets\s*\(\s*STDIN\s*\)/g, "__rl()")
-    .replace(/(?<![\w$>:\\])move_uploaded_file\s*\(/g, "__muf(")
-    .replace(/(?<![\w$>:\\])is_uploaded_file\s*\(/g, "__iuf(")
-    .replace(/(?<![\w$>:\\])mime_content_type\s*\(/g, "__mct(")
-    .replace(/(?<![\w$>:\\])\b(?:exit|die)\s*(\(|;)/g, (m, p) => (p === "(" ? "__ee(" : "__ee();"));
+function wrap(code, stdin, r) {
+  // `up` holds upload bytes for prepareWebRequest() (web-state.js) - never serialized here.
+  const { up, ...rq } = r;
+  const body = fix(code);
+  // In front of the code - or right after a leading declare(strict_types)/namespace,
+  // which PHP requires to come first (php-source.js).
+  return withPrelude(requestPrelude(stdin, rq) + "unset($__r);", body) + webTrailer(body);
+}
+// Source rewrites applied to every .php file before it runs (php-source.js): readline()/
+// fgets(STDIN) read the Input box, the upload functions and exit/die go to web-state.js's
+// stand-ins. Only real code is rewritten - never strings, comments or HTML.
+const fix = (code) => fixSource(code);
 
 // fp:1 = a form was submitted (existing behavior). fp:2 = a console message or uncaught
 // error/rejection, for the Console tab (console.js). fp:3 = a link was clicked; the parent
 // resolves its href against the student's own project files (resolveNavTarget below) and,
 // if it matches one, loads that file into Preview instead of leaving the click blocked.
 const BRIDGE =
-  // A file input only sends the file itself for a POST form with
-  // enctype="multipart/form-data" - otherwise a browser sends just its name as text.
-  '<script>document.addEventListener("submit",function(e){e.preventDefault();var f=e.target,d={},fl=[],ps=[];' +
-  'var m=(f.getAttribute("method")||"get").toLowerCase(),mp=m==="post"&&(f.getAttribute("enctype")||"").toLowerCase()==="multipart/form-data";' +
-  'new FormData(f).forEach(function(v,k){if(typeof v==="string"){d[k]=v;return}' +
-  'if(!mp){d[k]=v.name;return}if(!v.name&&!v.size){fl.push({k:k,empty:1});return}' +
+  // Like a browser: the clicked submit button's name/value is sent with the form, a
+  // button's formmethod/formaction/formenctype override the form's, and a file input only
+  // sends the file itself for a POST form with enctype="multipart/form-data" - otherwise
+  // just its name, as text. `q` is the form data as a query string (for name[] arrays),
+  // `a` the form's action.
+  '<script>document.addEventListener("submit",function(e){e.preventDefault();var f=e.target,s=e.submitter,d={},q=new URLSearchParams(),fl=[],ps=[];' +
+  'var at=function(n){return (s&&s.hasAttribute(n)?s.getAttribute(n):null)},' +
+  'm=(at("formmethod")||f.getAttribute("method")||"get").toLowerCase(),a=at("formaction")!==null?at("formaction"):(f.getAttribute("action")||""),' +
+  'mp=m==="post"&&(at("formenctype")||f.getAttribute("enctype")||"").toLowerCase()==="multipart/form-data",fd;' +
+  'try{fd=new FormData(f,s||undefined)}catch(x){fd=new FormData(f);if(s&&s.name)fd.append(s.name,s.value)}' +
+  'fd.forEach(function(v,k){if(typeof v==="string"){d[k]=v;q.append(k,v);return}' +
+  'if(!mp){d[k]=v.name;q.append(k,v.name);return}if(!v.name&&!v.size){fl.push({k:k,empty:1});return}' +
   'var it={k:k,name:v.name,type:v.type,size:v.size};fl.push(it);ps.push(v.arrayBuffer().then(function(b){it.buf=b}))});' +
-  'Promise.all(ps).then(function(){parent.postMessage({fp:1,m:m,d:d,files:fl},"*")})},true);' +
+  'Promise.all(ps).then(function(){parent.postMessage({fp:1,m:m,d:d,q:q.toString(),a:a,files:fl},"*")})},true);' +
   'document.addEventListener("click",function(e){var a=e.target.closest&&e.target.closest("a[href]");' +
   'if(!a)return;var href=a.getAttribute("href");if(!href||href.charAt(0)==="#")return;' +
   'e.preventDefault();parent.postMessage({fp:3,href:href},"*")},true);' +
@@ -91,7 +97,7 @@ function resolveNavTarget(href) {
       names.find((n) => navable(n) && n.split("/").pop() === base) || null;
   }
   if (!match) return null;
-  const params = {};
+  const params = {}; // simple key -> value view (kept for anything that reads it); `query` is the real thing
   if (query)
     query.split("&").forEach((pair) => {
       if (!pair) return;
@@ -101,7 +107,7 @@ function resolveNavTarget(href) {
           (v || "").replace(/\+/g, " "),
         );
     });
-  return { file: match, params };
+  return { file: match, params, query };
 }
 
 // Inserts BRIDGE as the very first script to run, without landing in front of a
@@ -214,6 +220,12 @@ async function getPhp(needsSql) {
 // so only one of them may drive it at a time. This flag - and disabling both buttons -
 // keeps a Run click and a Run Tests click from interleaving and corrupting each other's output.
 let engineBusy = false;
+// The question picker is off while a run is going: switching questions mid-run would let
+// the old page's cookies, session and saved files land in the new question.
+function setPickerBusy(b) {
+  const p = $("picker");
+  if (p) p.disabled = b;
+}
 
 // previewTarget names the file Preview should load next, overriding the exercise's real
 // main file for that one click - set when a nav link inside Preview is followed (see
@@ -230,6 +242,7 @@ async function run() {
     q = QUESTIONS[key];
   if (engineBusy) return;
   engineBusy = true;
+  setPickerBusy(true);
   btn.disabled = true;
   btn.textContent = "Running…";
   tbtn.disabled = true;
@@ -246,18 +259,13 @@ async function run() {
           "). Check your connection or that cdn.jsdelivr.net is allowed.",
       );
     const engine = await getPhp(q.sql);
-    for (const d of allFolders()) await ensureDir(engine, "/" + d);
-    for (const n of allNames())
-      await engine.writeFile(
-        "/" + n,
-        n.endsWith(".php") ? fix(docs[n].getValue()) : docs[n].getValue(),
-      );
-    await writeMedia(engine); // sample + saved files (media.js)
+    await syncProjectFiles(engine); // project + sample/saved files, nothing stale (media.js)
     const wr = webRequest(req);
     await prepareWebRequest(engine, wr);
     await engine.run(wrap(docs[main].getValue(), $("stdin").value, wr));
     persistWebState(await readWebState(engine));
     await collectSavedFiles(engine);
+    await cleanupWebRequest(engine, wr);
   } catch (err) {
     sinkErrs += String((err && err.message) || err);
     php = null; // the instance may be in a broken state after a JS-level failure; rebuild next run
@@ -307,6 +315,7 @@ async function run() {
     );
   }
   engineBusy = false;
+  setPickerBusy(false);
   btn.disabled = false;
   btn.textContent = "Run (Ctrl+Enter)";
   tbtn.disabled = !QUESTIONS[key].tests?.length;
@@ -321,7 +330,22 @@ function runFresh() {
 window.addEventListener("message", (e) => {
   if (e.source !== $("frame").contentWindow || !e.data) return;
   if (e.data.fp === 1) {
-    req = { m: e.data.m, d: e.data.d, files: e.data.files || [] };
+    req = { m: e.data.m, d: e.data.d, q: e.data.q, files: e.data.files || [] };
+    // A form whose action names another file in the project is sent to that file, like a
+    // real browser (e.g. form.php -> process.php). For a POST, the action's own ?query
+    // still becomes $_GET; for a GET, the form's fields replace it, as browsers do.
+    const a = (e.data.a || "").trim();
+    if (a && a.charAt(0) !== "#") {
+      const target = resolveNavTarget(a);
+      if (target) {
+        previewTarget = target.file;
+        if (req.m === "post" && target.query) req.gq = target.query;
+      } else if (typeof handleConsoleMessage === "function")
+        handleConsoleMessage({
+          level: "warn",
+          text: 'This form\'s action "' + a + '" does not match a .php/.html file in this project, so it was sent to the current page instead.',
+        });
+    }
     run();
     return;
   }
@@ -334,7 +358,7 @@ window.addEventListener("message", (e) => {
     const target = resolveNavTarget(e.data.href);
     if (target) {
       previewTarget = target.file;
-      req = { m: "get", d: target.params };
+      req = { m: "get", d: target.params, q: target.query };
       run();
     } else if (typeof handleConsoleMessage === "function")
       handleConsoleMessage({

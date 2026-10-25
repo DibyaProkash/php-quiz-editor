@@ -134,7 +134,10 @@ function checkPath(path, isFolder, ignore) {
   }
   const inIgnored = (n) =>
     ignore && (n === ignore || n.startsWith(ignore + "/"));
-  const files = allNames().filter((n) => !inIgnored(n)),
+  // sample/saved files (media.js) take up their names too
+  const files = allNames()
+      .concat(typeof media !== "undefined" ? [...media.keys()] : [])
+      .filter((n) => !inIgnored(n)),
     dirs = allFolders().filter((d) => !inIgnored(d)),
     low = path.toLowerCase();
   if (
@@ -214,6 +217,7 @@ function renameFolder(old, raw) {
     .filter((n) => n.startsWith(old + "/"))
     .forEach((n) => moveOne(n, swap(n)));
   folders = folders.map((f) => (inside(f) ? swap(f) : f));
+  if (typeof moveSavedUnder === "function") moveSavedUnder(old, path);
   open = new Set([...open].map((f) => (inside(f) ? swap(f) : f)));
   ancestors(path + "/x").forEach((a) => open.add(a));
   if (inside(selDir)) selDir = swap(selDir);
@@ -237,6 +241,7 @@ function deletePath(path, isFolder) {
   const wasCur = gone.includes(cur);
   custom = custom.filter((n) => !gone.includes(n));
   if (isFolder) folders = folders.filter((f) => !inside(f));
+  if (isFolder && typeof deleteSavedUnder === "function") deleteSavedUnder(path);
   if (isFolder && inside(selDir)) selDir = dirOf(path);
   trash.push(entry);
   if (trash.length > 5) trash.shift();

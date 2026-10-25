@@ -107,18 +107,9 @@ echo '<<<DBGSRC>>>' . base64_encode($__out);
 // student's own code calls exit()/die(), same as anything else after that point would be.)
 function wrapDebug(instrumentedCode, stdin, r) {
   const { up, ...rq } = r; // upload bytes go through prepareWebRequest(), not the prelude
-  const pre =
-    '<?php $__in=json_decode(base64_decode("' +
-    b64(JSON.stringify(stdinLines(stdin))) +
-    '"),true);' +
-    'function __rl($p=""){global $__in;echo $p;return count($__in)?array_shift($__in):false;}' +
-    '$__r=json_decode(base64_decode("' +
-    b64(JSON.stringify(rq)) +
-    '"),true);' +
-    'if($__r["m"]==="post"){$_POST=$__r["d"];$_SERVER["REQUEST_METHOD"]="POST";}else{$_GET=$__r["d"];$_SERVER["REQUEST_METHOD"]="GET";}' +
-    '$_REQUEST=$__r["d"];' +
-    WEB_PRELUDE + // cookies, sessions, uploads - see web-state.js
-    'unset($__r);' +
+  const stmts =
+    requestPrelude(stdin, rq) + // the same request setup as a normal Run (php-runner.js)
+    "unset($__r);" +
     // __safe() makes any captured value JSON-encodable (objects/resources can't be
     // json_encode()'d directly), and is depth-limited so a self-referential or very
     // deep structure can't hang the encoder.
@@ -129,13 +120,21 @@ function wrapDebug(instrumentedCode, stdin, r) {
     // The cap at 5000 steps keeps a runaway loop in the student's code from growing
     // this array (and the deep-copies __safe() makes of it) without bound and
     // crashing the tab - it does not stop the loop itself from still running.
-    'function __cap($vars,$line){if(count($GLOBALS["__trace"])>=5000)return;unset($vars["__trace"]);$GLOBALS["__trace"][]=array("line"=>$line,"vars"=>__safe($vars));}' +
-    " ?>";
+    'function __cap($vars,$line){if(count($GLOBALS["__trace"])>=5000)return;unset($vars["__trace"]);$GLOBALS["__trace"][]=array("line"=>$line,"vars"=>__safe($vars));}';
+  // A leading declare(strict_types)/namespace must stay the file's first statements, so
+  // drop the trace calls the instrumenter put straight after them (there's nothing to
+  // record there anyway) before the setup goes in behind them.
+  let code = instrumentedCode;
+  for (let k = 0; k < 2; k++)
+    code = code.replace(
+      /^(<\?php\s*(?:(?:\/\/[^\n]*|#[^\n]*|\/\*[\s\S]*?\*\/)\s*)*(?:declare\s*\(\s*strict_types\s*=\s*[01]\s*\)\s*;\s*)?(?:namespace\s+[A-Za-z_\\][\w\\]*\s*;)?)__cap\(get_defined_vars\(\),\d+\);/i,
+      "$1",
+    );
   const trailer =
     '<?php echo "\\n<<<DBGTRACE>>>".base64_encode(json_encode($GLOBALS["__trace"])); ?>';
   // The instrumented code always ends outside PHP mode (INSTRUMENTER_PHP closes it), so
   // the end-of-request hook can open its own block.
-  return pre + instrumentedCode + "<?php __editor_end(); ?>" + trailer;
+  return withPrelude(stmts, code) + "<?php __editor_end(); ?>" + trailer;
 }
 
 // Tokenizing is itself a PHP run through the same shared engine - see getPhp() in
@@ -174,6 +173,7 @@ var debugTrace = [],
 // and PHP's superglobals - so the Variables panel only ever shows what they wrote.
 const DEBUG_HIDDEN_VARS = new Set([
   "__trace",
+  "__up", // the editor's list of uploaded temp files (web-state.js)
   "__in",
   "__r",
   "GLOBALS",
@@ -316,6 +316,7 @@ async function runDebug() {
     testBtn = $("runTests");
   if (engineBusy) return;
   engineBusy = true;
+  setPickerBusy(true);
   btn.disabled = true;
   btn.textContent = "Debugging…";
   runBtn.disabled = true;
@@ -338,18 +339,13 @@ async function runDebug() {
     sinkText = "";
     sinkErrs = "";
     const engine = await getPhp(q.sql);
-    for (const d of allFolders()) await ensureDir(engine, "/" + d);
-    for (const n of allNames())
-      await engine.writeFile(
-        "/" + n,
-        n.endsWith(".php") ? fix(docs[n].getValue()) : docs[n].getValue(),
-      );
-    await writeMedia(engine); // sample + saved files (media.js)
+    await syncProjectFiles(engine); // project + sample/saved files, nothing stale (media.js)
     const wr = webRequest(req);
     await prepareWebRequest(engine, wr);
     await engine.run(wrapDebug(instrumented, $("stdin").value, wr));
     persistWebState(await readWebState(engine));
     await collectSavedFiles(engine);
+    await cleanupWebRequest(engine, wr);
     const marker = "\n<<<DBGTRACE>>>";
     const idx = sinkText.indexOf(marker);
     let trace = [],
@@ -390,6 +386,7 @@ async function runDebug() {
     setDebugState([], String((err && err.message) || err), "", true);
   }
   engineBusy = false;
+  setPickerBusy(false);
   btn.disabled = false;
   btn.innerHTML = DEBUG_BTN_LABEL;
   runBtn.disabled = false;

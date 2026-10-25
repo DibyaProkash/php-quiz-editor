@@ -21,22 +21,18 @@ async function runOneTest(t) {
     sinkErrs = ""; // reset before anything can throw, so a failed getPhp()/mkdir/writeFile
     // never leaves a PREVIOUS run's leftover output sitting in the sinks
     const engine = await getPhp(q.sql);
-    for (const d of allFolders()) await ensureDir(engine, "/" + d);
-    for (const n of allNames())
-      await engine.writeFile(
-        "/" + n,
-        n.endsWith(".php") ? fix(docs[n].getValue()) : docs[n].getValue(),
-      );
+    // Project files plus sample/saved files, and nothing a previous test saved (media.js)
+    await syncProjectFiles(engine);
     // A test starts from its own cookies/session/uploads (never the student's live
     // ones from the Storage tab) and changes nothing they can see afterwards.
     const wr = webRequest(
       { m: t.method || "post", d: t.input || {} },
       { cookies: t.cookies, session: t.session, files: t.files },
     );
-    await writeMedia(engine); // sample + saved files exist for tests too; tests never save any
     await prepareWebRequest(engine, wr);
     await engine.run(wrap(docs[main].getValue(), "", wr));
     state = await readWebState(engine);
+    await cleanupWebRequest(engine, wr);
   } catch (err) {
     sinkErrs += String((err && err.message) || err);
     php = null; // rebuild the engine next time - something went wrong at the JS level
@@ -179,6 +175,7 @@ async function runTests() {
     dbtn = $("debug");
   if (engineBusy || !q.tests?.length) return;
   engineBusy = true;
+  setPickerBusy(true);
   runBtn.disabled = true;
   testBtn.disabled = true;
   dbtn.disabled = true;
@@ -193,6 +190,7 @@ async function runTests() {
   for (const t of q.tests) rows.push({ t, r: await runOneTest(t) });
   renderTestResults(rows);
   engineBusy = false;
+  setPickerBusy(false);
   runBtn.disabled = false;
   testBtn.disabled = false;
   dbtn.disabled = false;

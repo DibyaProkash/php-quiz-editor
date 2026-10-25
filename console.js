@@ -28,7 +28,9 @@ function resetConsolePanel() {
 
 function handleConsoleMessage(data) {
   consoleEntries.push({
-    level: data.level || "log",
+    // Only the four levels the page's bridge sends - this ends up in a class attribute,
+    // and a page's own script could post anything.
+    level: ["log", "info", "warn", "error"].includes(data.level) ? data.level : "log",
     text: String(data.text ?? ""),
   });
   renderConsolePanel();

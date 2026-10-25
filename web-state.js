@@ -46,29 +46,39 @@ const WEB_PRELUDE =
   'ini_set("session.save_path","/tmp");ini_set("session.serialize_handler","php_serialize");' +
   'ini_set("session.use_cookies","0");ini_set("session.cache_limiter","");' +
   'session_id("editor");@unlink("/tmp/sess_editor");@unlink("' + WEB_STATE_FILE + '");' +
-  'if(!empty($__r["s"])&&is_array($__r["s"]))file_put_contents("/tmp/sess_editor",serialize($__r["s"]));' +
+  // The session is seeded from its exact serialized text when there is one (so objects
+  // come back as objects), or from a test's plain array.
+  'if(isset($__r["sr"])&&is_string($__r["sr"])&&$__r["sr"]!=="")file_put_contents("/tmp/sess_editor",$__r["sr"]);' +
+  'elseif(!empty($__r["s"])&&is_array($__r["s"]))file_put_contents("/tmp/sess_editor",serialize($__r["s"]));' +
+  // A warning from a stand-in reports the student's own line (the caller's), not line 1
+  // where these functions live - and goes to their set_error_handler() if they have one.
+  'function __warn($m){$b=debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS,2);$c=$b[1]??$b[0];$f=$c["file"]??"";$l=$c["line"]??0;' +
+  '$h=set_error_handler(null);restore_error_handler();if($h){$h(E_WARNING,$m,$f,$l);return;}' +
+  'if(error_reporting()&E_WARNING)echo PHP_EOL,"Warning: ",$m," in ",$f," on line ",$l,PHP_EOL;}' +
   'function __iuf($f){return is_string($f)&&in_array($f,$GLOBALS["__up"],true)&&is_file($f);}' +
   'function __muf($f,$t){if(!__iuf($f))return false;' +
-  'if(!@rename($f,$t)){trigger_error("move_uploaded_file(): Unable to move \\"".$f."\\" to \\"".$t."\\"",E_USER_WARNING);return false;}' +
+  'if(!@rename($f,$t)){__warn("move_uploaded_file(): Unable to move \\"".$f."\\" to \\"".$t."\\"");return false;}' +
   '$GLOBALS["__up"]=array_values(array_diff($GLOBALS["__up"],[$f]));return true;}' +
-  'function __mct($f){if(!is_file($f)){trigger_error("mime_content_type(".$f."): Failed to open stream: No such file or directory",E_USER_WARNING);return false;}' +
+  'function __mct($f){if(!is_file($f)){__warn("mime_content_type(".$f."): Failed to open stream: No such file or directory");return false;}' +
   '$i=@getimagesize($f);if($i&&!empty($i["mime"]))return $i["mime"];' +
   '$h=(string)file_get_contents($f,false,null,0,512);if($h==="")return "application/x-empty";' +
   'if(strncmp($h,"%PDF",4)===0)return "application/pdf";' +
   'return preg_match("/[\\\\x00-\\\\x08\\\\x0e-\\\\x1f]/",$h)?"application/octet-stream":"text/plain";}' +
-  'function __editor_end(){static $done=false;if($done)return;$done=true;$s=null;' +
-  'if(session_status()===PHP_SESSION_ACTIVE)$s=$_SESSION;' +
-  'elseif(is_file("/tmp/sess_editor")){$s=@unserialize((string)file_get_contents("/tmp/sess_editor"));if($s===false)$s=null;}' +
-  '@file_put_contents("' + WEB_STATE_FILE + '",json_encode(["h"=>headers_list(),"s"=>$s],JSON_PARTIAL_OUTPUT_ON_ERROR|JSON_INVALID_UTF8_SUBSTITUTE));}' +
+  // The end-of-request hook: Set-Cookie headers, plus the session both as plain data (for
+  // the Storage tab and tests) and as its exact serialized text (to restore it next time).
+  // After session_write_close()/session_regenerate_id() it reads the session's own file.
+  'function __editor_end(){static $done=false;if($done)return;$done=true;$s=null;$raw=null;' +
+  'if(session_status()===PHP_SESSION_ACTIVE){$s=$_SESSION;$raw=serialize($_SESSION);}' +
+  'else{$sf="/tmp/sess_".(session_id()?:"editor");if(is_file($sf)){$raw=(string)file_get_contents($sf);$s=@unserialize($raw);if($s===false){$s=null;$raw=null;}}}' +
+  '@file_put_contents("' + WEB_STATE_FILE + '",json_encode(["h"=>headers_list(),"s"=>$s,"r"=>$raw],JSON_PARTIAL_OUTPUT_ON_ERROR|JSON_INVALID_UTF8_SUBSTITUTE));}' +
   'function __ee($s=0){__editor_end();exit($s);}';
 
 // Appended right after the student's code (no newline added, so nothing shifts). If the
 // file ends while still in PHP mode, "?>" closes it first - which also supplies a missing
-// final semicolon, exactly as PHP itself treats "?>".
+// final semicolon, exactly as PHP itself treats "?>". Whether it does is decided by
+// php-source.js, so a "?>" inside a string or comment can't fool it.
 function webTrailer(code) {
-  const open = Math.max(code.lastIndexOf("<?php"), code.lastIndexOf("<?="));
-  const inPhp = open !== -1 && open > code.lastIndexOf("?>");
-  return (inPhp ? "?>" : "") + "<?php __editor_end(); ?>";
+  return (phpPieces(code).endsInPhp ? "?>" : "") + "<?php __editor_end(); ?>";
 }
 
 // ---------- per-question cookie jar and session store ----------
@@ -105,9 +115,13 @@ function webSession() {
     return null;
   }
 }
-function saveSession(s) {
+// The session is kept twice: as plain data for the Storage tab, and as PHP's own
+// serialized text (raw), which is what the next request restores - so an object stored
+// in $_SESSION comes back as that object, not as an array.
+function saveSession(s, raw) {
   const empty = s === null || (typeof s === "object" && !Object.keys(s).length);
   store("sess:" + key, empty ? undefined : JSON.stringify(s));
+  store("sessraw:" + key, empty || !raw ? undefined : raw);
 }
 
 // "Set-Cookie: name=value; expires=...; Max-Age=0; path=/" -> { name, value, exp }.
@@ -198,9 +212,17 @@ function testFiles(spec) {
     items.push({ k, name: s.name, type: s.type ?? MIME_BY_EXT[ext] ?? "application/octet-stream", size: s.size ?? 1024, buf: fakeUploadBytes(s).buffer, forceError: s.error });
   }
   const built = buildFiles(items);
-  // error 1 (too big for the server) can be asked for directly, whatever the size
+  // A test can ask for any upload error directly (1 too big for the server, 2 too big for
+  // the form, 3 partial, 6/7 server problems), whatever the size: no file, like PHP.
+  const count = {};
   items.forEach((it) => {
-    if (it.forceError === 1 && built.f[it.k]) Object.assign(built.f[it.k], { type: "", tmp_name: "", error: 1, size: 0 });
+    const k = it.k.endsWith("[]") ? it.k.slice(0, -2) : it.k,
+      idx = count[k] = (count[k] ?? -1) + 1,
+      e = it.forceError;
+    if (!e || e === 4 || !built.f[k]) return;
+    const fix = { type: "", tmp_name: "", error: e, size: 0 };
+    if (it.k.endsWith("[]")) for (const p in fix) built.f[k][p][idx] = fix[p];
+    else Object.assign(built.f[k], fix);
   });
   return built;
 }
@@ -211,12 +233,14 @@ function testFiles(spec) {
 // test's own starting cookies/session/uploads and nothing is persisted.
 function webRequest(r, seed) {
   const base = { m: r.m, d: r.d };
+  if (typeof r.q === "string") base.q = r.q; // the form's own query string (name[] arrays)
+  if (r.gq) base.gq = r.gq; // a POST form's action?query, for $_GET
   if (seed) {
     const t = testFiles(seed.files);
     return { ...base, c: seed.cookies || {}, s: seed.session || null, f: t.f, up: t.up };
   }
   const b = buildFiles(r.files);
-  return { ...base, c: liveCookies(), s: webSession(), f: b.f, up: b.up };
+  return { ...base, c: liveCookies(), s: webSession(), sr: load("sessraw:" + key) || "", f: b.f, up: b.up };
 }
 // Every file call that fails inside php-wasm (reading a missing file, creating a folder
 // that exists) also leaks an uncaught "ErrnoError" into the page, even when the promise
@@ -231,6 +255,15 @@ async function ensureDir(engine, path) {
 async function prepareWebRequest(engine, wr) {
   for (const u of wr.up || []) await engine.writeFile(u.tmp, u.data);
 }
+// Upload temp files that the page didn't move are deleted after each request, as PHP does.
+async function cleanupWebRequest(engine, wr) {
+  for (const u of wr.up || []) {
+    try {
+      const a = await engine.analyzePath(u.tmp);
+      if (a && a.exists) await engine.unlink(u.tmp);
+    } catch (e) {}
+  }
+}
 async function readWebState(engine) {
   let st = null;
   try {
@@ -238,7 +271,7 @@ async function readWebState(engine) {
     if (a && a.exists) st = JSON.parse(await engine.readFile(WEB_STATE_FILE, { encoding: "utf8" }));
   } catch (e) {}
   if (!st) return null;
-  return { cookies: parseSetCookies(st.h), session: st.s ?? null };
+  return { cookies: parseSetCookies(st.h), session: st.s ?? null, raw: st.r ?? null };
 }
 // After a live Run/Debug: fold the page's Set-Cookie headers into the jar and keep its
 // session. null state (the script died before the end) leaves both as they were.
@@ -250,7 +283,7 @@ function persistWebState(st) {
       else j[c.name] = { v: c.value, exp: c.exp };
     }
     saveJar(j);
-    saveSession(st.session);
+    saveSession(st.session, st.raw);
   }
   renderStoragePanel();
 }
@@ -280,6 +313,6 @@ function clearCookies() {
   renderStoragePanel();
 }
 function clearSessionStore() {
-  saveSession(null);
+  saveSession(null, null);
   renderStoragePanel();
 }
