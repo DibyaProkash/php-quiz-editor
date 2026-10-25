@@ -314,6 +314,7 @@
                 >0</span
               >
             </button>
+            <button id="vStorage" hidden>Storage</button>
             <span id="navNote" hidden></span>
           </div>
           <iframe
@@ -326,8 +327,8 @@
             <button id="runTests">Run tests</button>
             <p class="testNote">
               Runs your current code through the real PHP interpreter with each
-              set of inputs below, and compares the "Final amount" it produces
-              against the expected answer.
+              set of inputs below, and compares what your page produces against
+              the expected answer.
             </p>
             <div id="testResults" aria-live="polite"></div>
           </div>
@@ -342,6 +343,25 @@
               No console messages yet for this run.
             </div>
             <div id="consoleList" aria-live="polite"></div>
+          </div>
+          <div id="storagePanel" hidden>
+            <p class="testNote">
+              What this page has stored, like the Application tab in a
+              browser's developer tools. Cookies come from setcookie() and are
+              sent back in $_COOKIE on every Run and form submit. The session is
+              $_SESSION after session_start(). Both last until you clear them or
+              close this tab. Tests never use or change them.
+            </p>
+            <div class="storageHead">
+              <h3>Cookies</h3>
+              <button id="clearCookies" type="button">Clear cookies</button>
+            </div>
+            <div id="storageCookies"></div>
+            <div class="storageHead">
+              <h3>Session</h3>
+              <button id="clearSession" type="button">Clear session</button>
+            </div>
+            <div id="storageSession"></div>
           </div>
           <div id="debugPanel" hidden>
             <p class="testNote">
@@ -574,6 +594,7 @@
     <script src="editor-ui.js"></script>
     <script src="theme.js"></script>
     <script src="markdown.js"></script>
+    <script src="web-state.js"></script>
     <script src="php-runner.js"></script>
     <script src="error-lens.js"></script>
     <script src="tests.js"></script>

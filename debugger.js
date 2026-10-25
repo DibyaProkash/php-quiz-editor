@@ -106,16 +106,19 @@ echo '<<<DBGSRC>>>' . base64_encode($__out);
 // runs the trace-dump as ordinary trailing code instead. That means it's skipped if the
 // student's own code calls exit()/die(), same as anything else after that point would be.)
 function wrapDebug(instrumentedCode, stdin, r) {
+  const { up, ...rq } = r; // upload bytes go through prepareWebRequest(), not the prelude
   const pre =
     '<?php $__in=json_decode(base64_decode("' +
     b64(JSON.stringify(stdinLines(stdin))) +
     '"),true);' +
     'function __rl($p=""){global $__in;echo $p;return count($__in)?array_shift($__in):false;}' +
     '$__r=json_decode(base64_decode("' +
-    b64(JSON.stringify(r)) +
+    b64(JSON.stringify(rq)) +
     '"),true);' +
     'if($__r["m"]==="post"){$_POST=$__r["d"];$_SERVER["REQUEST_METHOD"]="POST";}else{$_GET=$__r["d"];$_SERVER["REQUEST_METHOD"]="GET";}' +
-    '$_REQUEST=$__r["d"];unset($__r);' +
+    '$_REQUEST=$__r["d"];' +
+    WEB_PRELUDE + // cookies, sessions, uploads - see web-state.js
+    'unset($__r);' +
     // __safe() makes any captured value JSON-encodable (objects/resources can't be
     // json_encode()'d directly), and is depth-limited so a self-referential or very
     // deep structure can't hang the encoder.
@@ -130,7 +133,9 @@ function wrapDebug(instrumentedCode, stdin, r) {
     " ?>";
   const trailer =
     '<?php echo "\\n<<<DBGTRACE>>>".base64_encode(json_encode($GLOBALS["__trace"])); ?>';
-  return pre + instrumentedCode + trailer;
+  // The instrumented code always ends outside PHP mode (INSTRUMENTER_PHP closes it), so
+  // the end-of-request hook can open its own block.
+  return pre + instrumentedCode + "<?php __editor_end(); ?>" + trailer;
 }
 
 // Tokenizing is itself a PHP run through the same shared engine - see getPhp() in
@@ -333,17 +338,16 @@ async function runDebug() {
     sinkText = "";
     sinkErrs = "";
     const engine = await getPhp(q.sql);
-    for (const d of allFolders()) {
-      try {
-        await engine.mkdir("/" + d);
-      } catch (e) {}
-    }
+    for (const d of allFolders()) await ensureDir(engine, "/" + d);
     for (const n of allNames())
       await engine.writeFile(
         "/" + n,
         n.endsWith(".php") ? fix(docs[n].getValue()) : docs[n].getValue(),
       );
-    await engine.run(wrapDebug(instrumented, $("stdin").value, req));
+    const wr = webRequest(req);
+    await prepareWebRequest(engine, wr);
+    await engine.run(wrapDebug(instrumented, $("stdin").value, wr));
+    persistWebState(await readWebState(engine));
     const marker = "\n<<<DBGTRACE>>>";
     const idx = sinkText.indexOf(marker);
     let trace = [],

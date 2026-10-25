@@ -5,6 +5,8 @@ const b64 = (s) => btoa(unescape(encodeURIComponent(s)));
 const stdinLines = (s) =>
   s === "" ? [] : s.replace(/\r\n?/g, "\n").replace(/\n$/, "").split("\n");
 function wrap(code, stdin, r) {
+  // `up` holds upload bytes for prepareWebRequest() (web-state.js) - never serialized here.
+  const { up, ...rq } = r;
   // Prelude sits on line 1 so PHP error line numbers match the editor.
   const pre =
     '<?php $__in=json_decode(base64_decode("' +
@@ -12,25 +14,43 @@ function wrap(code, stdin, r) {
     '"),true);' +
     'function __rl($p=""){global $__in;echo $p;return count($__in)?array_shift($__in):false;}' +
     '$__r=json_decode(base64_decode("' +
-    b64(JSON.stringify(r)) +
+    b64(JSON.stringify(rq)) +
     '"),true);' +
     'if($__r["m"]==="post"){$_POST=$__r["d"];$_SERVER["REQUEST_METHOD"]="POST";}else{$_GET=$__r["d"];$_SERVER["REQUEST_METHOD"]="GET";}' +
-    '$_REQUEST=$__r["d"];unset($__r); ?>';
-  return pre + fix(code);
+    '$_REQUEST=$__r["d"];' +
+    WEB_PRELUDE + // cookies, sessions, uploads - see web-state.js
+    'unset($__r); ?>';
+  const body = fix(code);
+  return pre + body + webTrailer(body);
 }
+// Source rewrites applied to every .php file before it runs. readline()/fgets(STDIN) read
+// the Input box. The upload functions and exit/die go to web-state.js's stand-ins (the
+// real move_uploaded_file() only accepts files PHP's own HTTP upload parser received,
+// and exit/die must save cookies and the session first). Each rewrite stays on the same
+// line, so error line numbers don't move. The lookbehind skips method calls and names
+// like $obj->exit( or Foo::die(.
 const fix = (code) =>
   code
     .replace(/\breadline\s*\(/g, "__rl(")
-    .replace(/\bfgets\s*\(\s*STDIN\s*\)/g, "__rl()");
+    .replace(/\bfgets\s*\(\s*STDIN\s*\)/g, "__rl()")
+    .replace(/(?<![\w$>:\\])move_uploaded_file\s*\(/g, "__muf(")
+    .replace(/(?<![\w$>:\\])is_uploaded_file\s*\(/g, "__iuf(")
+    .replace(/(?<![\w$>:\\])mime_content_type\s*\(/g, "__mct(")
+    .replace(/(?<![\w$>:\\])\b(?:exit|die)\s*(\(|;)/g, (m, p) => (p === "(" ? "__ee(" : "__ee();"));
 
 // fp:1 = a form was submitted (existing behavior). fp:2 = a console message or uncaught
 // error/rejection, for the Console tab (console.js). fp:3 = a link was clicked; the parent
 // resolves its href against the student's own project files (resolveNavTarget below) and,
 // if it matches one, loads that file into Preview instead of leaving the click blocked.
 const BRIDGE =
-  '<script>document.addEventListener("submit",function(e){e.preventDefault();var f=e.target,d={};' +
-  'new FormData(f).forEach(function(v,k){if(typeof v==="string")d[k]=v});' +
-  'parent.postMessage({fp:1,m:(f.getAttribute("method")||"get").toLowerCase(),d:d},"*")},true);' +
+  // A file input only sends the file itself for a POST form with
+  // enctype="multipart/form-data" - otherwise a browser sends just its name as text.
+  '<script>document.addEventListener("submit",function(e){e.preventDefault();var f=e.target,d={},fl=[],ps=[];' +
+  'var m=(f.getAttribute("method")||"get").toLowerCase(),mp=m==="post"&&(f.getAttribute("enctype")||"").toLowerCase()==="multipart/form-data";' +
+  'new FormData(f).forEach(function(v,k){if(typeof v==="string"){d[k]=v;return}' +
+  'if(!mp){d[k]=v.name;return}if(!v.name&&!v.size){fl.push({k:k,empty:1});return}' +
+  'var it={k:k,name:v.name,type:v.type,size:v.size};fl.push(it);ps.push(v.arrayBuffer().then(function(b){it.buf=b}))});' +
+  'Promise.all(ps).then(function(){parent.postMessage({fp:1,m:m,d:d,files:fl},"*")})},true);' +
   'document.addEventListener("click",function(e){var a=e.target.closest&&e.target.closest("a[href]");' +
   'if(!a)return;var href=a.getAttribute("href");if(!href||href.charAt(0)==="#")return;' +
   'e.preventDefault();parent.postMessage({fp:3,href:href},"*")},true);' +
@@ -226,17 +246,16 @@ async function run() {
           "). Check your connection or that cdn.jsdelivr.net is allowed.",
       );
     const engine = await getPhp(q.sql);
-    for (const d of allFolders()) {
-      try {
-        await engine.mkdir("/" + d);
-      } catch (e) {}
-    }
+    for (const d of allFolders()) await ensureDir(engine, "/" + d);
     for (const n of allNames())
       await engine.writeFile(
         "/" + n,
         n.endsWith(".php") ? fix(docs[n].getValue()) : docs[n].getValue(),
       );
-    await engine.run(wrap(docs[main].getValue(), $("stdin").value, req));
+    const wr = webRequest(req);
+    await prepareWebRequest(engine, wr);
+    await engine.run(wrap(docs[main].getValue(), $("stdin").value, wr));
+    persistWebState(await readWebState(engine));
   } catch (err) {
     sinkErrs += String((err && err.message) || err);
     php = null; // the instance may be in a broken state after a JS-level failure; rebuild next run
@@ -300,7 +319,7 @@ function runFresh() {
 window.addEventListener("message", (e) => {
   if (e.source !== $("frame").contentWindow || !e.data) return;
   if (e.data.fp === 1) {
-    req = { m: e.data.m, d: e.data.d };
+    req = { m: e.data.m, d: e.data.d, files: e.data.files || [] };
     run();
     return;
   }

@@ -113,6 +113,8 @@ function renderTabs() {
 function view(v) {
   $('vPrev').className = v === 'prev' ? 'on' : ''; $('vOut').className = v === 'out' ? 'on' : ''; $('vTests').className = v === 'tests' ? 'on' : ''; $('vDebug').className = v === 'debug' ? 'on' : ''; $('vConsole').className = v === 'console' ? 'on' : '';
   $('frame').hidden = v !== 'prev'; $('out').hidden = v !== 'out'; $('testPanel').hidden = v !== 'tests'; $('debugPanel').hidden = v !== 'debug'; $('consolePanel').hidden = v !== 'console';
+  $('vStorage').className = v === 'storage' ? 'on' : ''; $('storagePanel').hidden = v !== 'storage';
+  if (v === 'storage' && typeof renderStoragePanel === 'function') renderStoragePanel();
 }
 function renderFuncs(list) {
   $('funcsPanel').innerHTML = list.map(f =>
@@ -129,7 +131,10 @@ function loadQuestion() {
     docs[f.name] = CodeMirror.Doc(load('f:' + key + ':' + f.name) ?? f.code, modeOf(f.name));
   });
   const list = k => { try { const v = JSON.parse(load(k + ':' + key) || '[]'); return Array.isArray(v) ? v.filter(x => typeof x === 'string') : []; } catch (e) { return []; } };
-  custom = list('custom').filter(n => !q.files.some(f => f.name === n)); folders = list('folders');
+  custom = list('custom').filter(n => !q.files.some(f => f.name === n));
+  // A question can start with empty folders of its own (q.folders, e.g. an uploads/ folder
+  // for a file-upload exercise) until the student has saved a folder list of their own.
+  folders = load('folders:' + key) === null ? (q.folders || []).slice() : list('folders');
   custom.forEach(n => { docs[n] = CodeMirror.Doc(load('f:' + key + ':' + n) ?? blankOf(n), modeOf(n)); });
   open = new Set(allFolders()); selDir = ''; renaming = null; trash = []; updTrash();
   const savedMain = load('main:' + key);
@@ -139,6 +144,9 @@ function loadQuestion() {
   $('stdinbox').hidden = q.stdin === undefined;
   $('stdin').value = load('stdin:' + key) ?? (q.stdin || '');
   $('vPrev').hidden = !q.preview;
+  // Storage (cookies + session) only matters for questions that use them - see web-state.js.
+  $('vStorage').hidden = !q.storage;
+  if (typeof renderStoragePanel === 'function') renderStoragePanel();
   // The Hints accordion itself (not just its panel) stays hidden until the student
   // actually clicks "Show hint" in the status bar - so a question with hints available
   // doesn't display an empty-looking "Hints" box before anyone has asked for one.
@@ -186,6 +194,8 @@ cm.on('swapDoc', updHist);
 cm.on('change', () => { updHist(); clearUndo(); if (cur) store('f:' + key + ':' + cur, cm.getValue()); });
 $('stdin').addEventListener('input', e => { clearUndo(); store('stdin:' + key, e.target.value); });
 $('vPrev').onclick = () => view('prev'); $('vOut').onclick = () => view('out'); $('vTests').onclick = () => view('tests'); $('vConsole').onclick = () => view('console');
+$('vStorage').onclick = () => view('storage');
+$('clearCookies').onclick = () => clearCookies(); $('clearSession').onclick = () => clearSessionStore();
 $('funcsBtn').onclick = () => {
   const opening = $('funcsPanel').hidden;
   $('funcsPanel').hidden = !opening; $('funcsBtn').setAttribute('aria-expanded', String(opening));

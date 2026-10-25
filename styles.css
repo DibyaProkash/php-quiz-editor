@@ -159,7 +159,15 @@ main{flex:1;display:grid;grid-template-columns:210px 1fr 1fr;min-height:0;zoom:v
 #stdinbox h2{margin:0;padding:6px 14px;font-size:13px;font-weight:500;color:var(--muted);background:var(--panel)}
 #stdin{display:block;height:90px;resize:vertical;width:100%;background:var(--bg);color:var(--text);border:0;padding:10px 14px;font:14px ui-monospace,Menlo,Consolas,monospace}
 #hints p{margin:0 0 8px}
-#testPanel,#debugPanel,#consolePanel{flex:1;overflow:auto;padding:12px 14px}
+#testPanel,#debugPanel,#consolePanel,#storagePanel{flex:1;overflow:auto;padding:12px 14px}
+/* Storage tab (web-state.js): cookies table + session dump */
+.storageHead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:14px 0 6px}
+.storageHead h3{margin:0;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.storageHead button{font-size:12px;padding:4px 10px}
+.storageTable{width:100%;border-collapse:collapse;font-size:12.5px}
+.storageTable th,.storageTable td{text-align:left;padding:5px 8px;border-bottom:1px solid var(--line);vertical-align:top;overflow-wrap:anywhere}
+.storageTable th{color:var(--muted);font-weight:600}
+.storagePre{margin:0;padding:10px 12px;background:var(--sunken);border:1px solid var(--line);border-radius:6px;font-size:12.5px;overflow:auto}
 #debugPanel h2{margin:0 0 8px;font-size:13px;font-weight:600;color:var(--muted)}
 .testNote{margin:8px 0 14px;color:var(--muted);font-size:12.5px;line-height:1.5}
 #runTests{display:inline-flex;align-items:center;gap:7px}
