@@ -219,6 +219,56 @@ const MOVIE_VALIDATION_FUNCS = [
   },
 ];
 
+const LAB_FILE_FUNCS = [
+  { sig: "$_FILES['field']: array", desc: "Everything PHP knows about a file uploaded with <input type=\"file\" name=\"field\">: name, type, size, tmp_name (where PHP saved it for now) and error.", example: "$_FILES['doc']['name']      // 'Notes.TXT'\n$_FILES['doc']['size']      // 2048 (bytes)\n$_FILES['doc']['tmp_name']  // '/tmp/php8a1b2c'\n$_FILES['doc']['error']     // 0" },
+  { sig: "UPLOAD_ERR_OK (0) · UPLOAD_ERR_INI_SIZE (1) · UPLOAD_ERR_NO_FILE (4)", desc: "Values of $_FILES[...]['error']: 0 means the upload worked, 1 means the file was bigger than the server allows, and 4 means no file was chosen.", example: "$_FILES['doc']['error'] === UPLOAD_ERR_OK\n// true when the upload worked" },
+  { sig: "pathinfo(string $path, int $flags): string|array", desc: "Splits a file path into its parts. With PATHINFO_EXTENSION it returns just the extension, without the dot.", example: "pathinfo('notes.final.txt', PATHINFO_EXTENSION)\n// 'txt'\npathinfo('README', PATHINFO_EXTENSION)\n// ''" },
+  { sig: "strtolower(string $str): string", desc: "Converts a string to lowercase.", example: "strtolower('Report.DOCX')\n// 'report.docx'" },
+  { sig: "in_array(mixed $needle, array $haystack): bool", desc: "Checks whether a value is in an array.", example: "in_array('gif', ['jpg', 'png'])\n// false" },
+  { sig: "getimagesize(string $filename): array|false", desc: "Reads an image file and returns its size: index 0 is the width and index 1 is the height, in pixels. It also includes the image's real type under 'mime'.", example: "[$w, $h] = getimagesize($path);\n// e.g. $w = 1200, $h = 900\ngetimagesize($path)['mime']\n// 'image/png'" },
+  { sig: "max(mixed ...$values): mixed", desc: "Returns the largest of the values given.", example: "max(1200, 900)\n// 1200" },
+  { sig: "round(float $num, int $precision = 0): float", desc: "Rounds to the nearest whole number, or to $precision decimal places.", example: "round(612.5)\n// 613.0\nround(612.4)\n// 612.0" },
+  { sig: "move_uploaded_file(string $from, string $to): bool", desc: "Moves an uploaded file from its temporary location to where you want to keep it. Returns true if it worked, false if it didn't (for example, the folder doesn't exist).", example: "move_uploaded_file($_FILES['doc']['tmp_name'], 'files/notes.txt')\n// true" },
+];
+const LAB_DATE_FUNCS = [
+  { sig: "DateTime::format(string $format): string", desc: "Writes a date out using format characters: l (full day name), D (short day), F (full month), M (short month), j (day, no leading zero), Y (year), g (12-hour hour), i (minutes), a (am/pm). A backslash shows the next letter as itself.", example: "$d = new DateTime('2025-03-07 09:05');\n$d->format('l j F')\n// 'Friday 7 March'\n$d->format('g:i a \\o\\n D')\n// '9:05 am on Fri'" },
+  { sig: "$a < $b   $a <= $b   $a > $b   $a >= $b", desc: "DateTime objects can be compared directly, like numbers - the earlier date is the smaller one.", example: "new DateTime('2025-01-01') < new DateTime('2025-06-30')\n// true" },
+  { sig: "DateTime::diff(DateTime $other): DateInterval", desc: "The time between two dates, as a DateInterval object.", example: "$a = new DateTime('2025-01-01 08:00');\n$b = new DateTime('2025-01-03 20:00');\n$gap = $a->diff($b);" },
+  { sig: "DateInterval::format(string $format): string", desc: "Writes an interval out using % codes: %a (total days), %d (days part), %h (hours), %i (minutes).", example: "$gap->format('%a days and %h hours')\n// '2 days and 12 hours'" },
+  { sig: "new DateInterval(string $duration)", desc: "An amount of time: P, then a number and a unit - D days, W weeks, M months, Y years. Times go after a T, like PT3H for 3 hours.", example: "new DateInterval('P3D')   // 3 days\nnew DateInterval('P1M')   // 1 month" },
+  { sig: "DateTime::add(DateInterval $interval): DateTime", desc: "Adds an interval to the date - and changes that DateTime object itself.", example: "$d = new DateTime('2025-01-30');\n$d->add(new DateInterval('P3D'));\n$d->format('M j')\n// 'Feb 2'" },
+  { sig: "clone $object", desc: "Makes a separate copy of an object, so changing the copy leaves the original alone.", example: "$start = new DateTime('2025-05-01');\n$later = clone $start;\n$later->add(new DateInterval('P1W'));\n// $start is still May 1" },
+  { sig: "number_format(float $num, int $decimals = 0): string", desc: "Formats a number with a fixed number of decimal places.", example: "number_format(5, 2)\n// '5.00'" },
+];
+const LAB_STATE_FUNCS = [
+  { sig: "session_start(): bool", desc: "Starts a new session, or carries on with the visitor's current one. Call it before using $_SESSION, on every page that uses it.", example: "session_start();" },
+  { sig: "$_SESSION['key']", desc: "An array that keeps its values for the rest of this visit - every page that calls session_start() sees the same values.", example: "$_SESSION['views'] = ($_SESSION['views'] ?? 0) + 1;" },
+  { sig: "setcookie(string $name, string $value, int $expires = 0): bool", desc: "Asks the browser to store a cookie. $expires is a timestamp; leave it out and the cookie lasts until the browser closes. The browser sends it back from the next request on.", example: "setcookie('theme', 'dark', time() + 7 * 24 * 60 * 60);\n// kept for 7 days" },
+  { sig: "$_COOKIE['name']", desc: "The cookies the browser sent with this request.", example: "$theme = $_COOKIE['theme'] ?? 'light';" },
+  { sig: "time(): int", desc: "The current time as a Unix timestamp - the number of seconds since January 1, 1970.", example: "time() + 60 * 60\n// one hour from now" },
+  { sig: "$value ?? $default", desc: "Gives $value if it exists and isn't null, otherwise $default - handy for an array key that might not be there.", example: "$_GET['page'] ?? 1" },
+  { sig: "trim(string $str): string", desc: "Removes spaces from the start and end of a string.", example: "trim('  Ana  ')\n// 'Ana'" },
+];
+const LAB_ERROR_FUNCS = [
+  { sig: "explode(string $separator, string $string): array", desc: "Splits a string into an array at every separator.", example: "explode(',', 'a, b,,c')\n// ['a', ' b', '', 'c']" },
+  { sig: "trim(string $str): string", desc: "Removes spaces from the start and end of a string.", example: "trim(' 4.5 ')\n// '4.5'" },
+  { sig: "is_numeric(mixed $value): bool", desc: "Checks whether a value is a number, or a string that holds one.", example: "is_numeric('9.5')\n// true\nis_numeric('nine')\n// false" },
+  { sig: "count(array $array): int", desc: "How many elements an array has.", example: "count([3, 4])\n// 2" },
+  { sig: "array_sum(array $array): int|float", desc: "Adds up every value in an array.", example: "array_sum([3, 4.5])\n// 7.5" },
+  { sig: "round(float $num, int $precision = 0): float", desc: "Rounds to $precision decimal places.", example: "round(6.666, 1)\n// 6.7" },
+  { sig: "number_format(float $num, int $decimals = 0): string", desc: "Formats a number with a fixed number of decimal places - so a whole number still shows its decimals.", example: "number_format(6, 1)\n// '6.0'" },
+  { sig: "class MyException extends Exception {}", desc: "A custom exception type of your own, so a catch block can pick out just your kind of problem.", example: "class StockException extends Exception {}" },
+  { sig: "throw new Exception(string $message)", desc: "Stops the current function at once and hands the problem to the nearest matching catch block.", example: "if ($qty < 1) {\n    throw new StockException('Quantity must be at least 1.');\n}" },
+  { sig: "try { ... } catch (SomeException $e) { ... } finally { ... }", desc: "Runs the try block. If it throws that kind of exception, the catch block runs. The finally block runs after either one, every time.", example: "try {\n    $total = price($qty);\n} catch (StockException $e) {\n    echo $e->getMessage();\n} finally {\n    echo 'Done';\n}" },
+  { sig: "Exception::getMessage(): string", desc: "The message the exception was created with.", example: "$e->getMessage()\n// 'Quantity must be at least 1.'" },
+];
+
+// Island Lens lab (Chapters 7-10): the same card layout as Movie Night, in sea colours,
+// plus the "Signed in as" line for Part 3.
+const ISLAND_CSS =
+  movieCss("#0e2f36", "#2a5a63", "#cdeee4", "#0b4a3c", "#1f7a6d", "#5f7f84", "#dce8e6") +
+  ".welcome{margin:0 0 12px;padding:8px 12px;border-radius:6px;background:#e6f4f1;color:#0b4a3c;font-weight:600}\n";
+
 const QUESTIONS = {
   mv1a: {
     title: "Movie Night Set 1, Part 1 of 3 – Classes and Objects (3 pts)",
@@ -1187,6 +1237,523 @@ if ($submitted) {
       { name: "script.js", editable: false, code: MOVIE_SCRIPT },
     ],
   },
+  il1: {
+    title: "Island Lens Lab, Part 1 of 4 – Images & Files",
+    preview: true,
+    functions: LAB_FILE_FUNCS,
+    folders: ["uploads"],
+    tests: [
+      {"label": "sunset.jpg - 1366 × 768, 420 KB", "files": {"photo": {"name": "sunset.jpg", "width": 1366, "height": 768, "size": 430080}}, "expectResult": "Landscape, 800 x 450", "expectContains": "uploads/sunset.jpg"},
+      {"label": "Forest.PNG - 900 × 1500, 300 KB", "files": {"photo": {"name": "Forest.PNG", "width": 900, "height": 1500, "size": 307200}}, "expectResult": "Portrait, 480 x 800", "expectContains": "uploads/forest.png"},
+      {"label": "harbour.jpeg - 2400 × 1600, 900 KB", "files": {"photo": {"name": "harbour.jpeg", "width": 2400, "height": 1600, "size": 921600}}, "expectResult": "Landscape, 800 x 533"},
+      {"label": "badge.png - 640 × 640, exactly 1 MB (already fits)", "files": {"photo": {"name": "badge.png", "width": 640, "height": 640, "size": 1048576}}, "expectResult": "Square, 640 x 640", "expectContains": "uploads/badge.png"},
+      {"label": "entry.pdf - a PDF, 200 KB", "files": {"photo": {"name": "entry.pdf", "size": 204800}}, "expectResult": "Only JPG and PNG photos are accepted."},
+      {"label": "eagle.jpg - 3000 × 2000, 1.5 MB", "files": {"photo": {"name": "eagle.jpg", "width": 3000, "height": 2000, "size": 1572864}}, "expectResult": "Photos must be 1 MB or smaller."},
+      {"label": "whale.jpg - refused by the server (over 2 MB)", "files": {"photo": {"name": "whale.jpg", "error": 1, "size": 3145728}}, "expectResult": "Photos must be 1 MB or smaller."},
+      {"label": "No file chosen", "files": {"photo": {"error": 4}}, "expectResult": "Please choose a photo to upload."},
+    ],
+    hints: [
+      "Each uploaded file has an error code in $_FILES. Look up (in the slides or the PHP function reference) which code means no file was chosen and which means the file was too big for the server.",
+      "The extension is the part of the file name after the last dot. Make the whole name lowercase first, so SUNSET.JPG and sunset.jpg are treated the same.",
+      "getimagesize() reads an image and gives you its width first and its height second. Read the uploaded file where PHP saved it for now, not its original name.",
+      "Landscape: the width becomes 800 and the height shrinks by the ratio. Portrait: the other way round. Only shrink when the longest side is over 800.",
+    ],
+    files: [
+      { name: "README.md", editable: false, code: `# Island Lens Lab, Part 1 of 4 – Images & Files (Chapter 7)
+
+**Island Lens** is the college's photo contest. This lab builds four small pages for it, one for each chapter: uploading a photo (Ch 7), working out the entry fee from the date (Ch 8), remembering the photographer with a cookie and a session (Ch 9), and scoring photos safely with exceptions (Ch 10). Each part is its own link and can be done on its own.
+
+## Goal
+A photographer uploads one photo. Your page checks it, works out how big it will be in the gallery, and saves it into the \`uploads\` folder.
+
+## What to build
+Fill in the \`// TODO\` sections in \`index.php\`:
+
+1. **Check the upload**, in this order: was a photo uploaded at all? Is it too big - either refused by the server, or over the contest's own 1 MB limit? Is it a JPG or PNG, whatever the capital letters in its name? Each problem has its own message, already written for you at the top of the file.
+2. **Read the photo's real width and height** from the uploaded file itself, not from anything the visitor typed.
+3. **Landscape, portrait or square?** Decide from the photo's ratio (width ÷ height), the same way the slides do.
+4. **Work out its gallery size.** Its longest side becomes 800 px, and the other side shrinks by the same ratio, rounded to whole pixels. A photo that already fits stays exactly as it is - never make a photo bigger.
+5. **Save it**: move the photo into \`uploads/\` with its file name in lowercase, and show where it was saved. Only show the path if the move actually worked.
+
+## A worked example (not one of the tests)
+A 1500 × 1200 photo has a ratio of 1500 ÷ 1200 = 1.25, so it's landscape. Its longest side, 1500, becomes 800, so its height becomes 800 ÷ 1.25 = 640. The result is **Landscape, 800 x 640**.
+
+## Trying it out
+Click **Run**, choose a photo from your computer, and click **Upload**. The form already has what a file upload needs: \`method="post"\` and \`enctype="multipart/form-data"\`. Without that enctype, a browser only sends the file's *name*. Like a default PHP server, the editor refuses uploads over 2 MB before your code even runs, and tells you through the upload's error code.
+
+## Testing your code
+Open the **Tests** tab and click **Run tests**. The tests make up their own uploads - different sizes, shapes and file types - so they don't need a real photo.
+
+## Files in this project
+| File | Can I edit it? |
+|---|---|
+| \`index.php\` | ✅ Yes - this is the only file you need to change |
+| \`style.css\` | 🔒 Read-only - provided styling |
+| \`README.md\` | 🔒 Read-only - this file |
+` },
+      { name: "index.php", editable: true, code: `<?php
+// Island Lens Photo Contest - Part 1 of 4: Images & Files (Chapter 7)
+// A photographer uploads one photo. Check it, work out how big it will be in the
+// gallery, and save it into the uploads folder.
+
+const MAX_BYTES  = 1048576;               // 1 MB - the contest's own limit
+const GALLERY_PX = 800;                   // the longest side of a gallery photo
+const ALLOWED    = ['jpg', 'jpeg', 'png'];
+
+// Use these exact messages - the tests look for them.
+const MSG_NO_FILE  = 'Please choose a photo to upload.';
+const MSG_TOO_BIG  = 'Photos must be 1 MB or smaller.';
+const MSG_BAD_TYPE = 'Only JPG and PNG photos are accepted.';
+
+$submitted   = $_SERVER['REQUEST_METHOD'] === 'POST';
+$error       = '';
+$orientation = '';
+$newWidth    = 0;
+$newHeight   = 0;
+$savedAs     = '';
+
+if ($submitted) {
+    $photo = $_FILES['photo'] ?? null;
+
+    // TODO 1: work out $error, checking in this order:
+    //   - no photo was uploaded at all                     -> MSG_NO_FILE
+    //   - the server refused it for being too big, OR it
+    //     is bigger than MAX_BYTES                           -> MSG_TOO_BIG
+    //   - its extension isn't in ALLOWED (in any letter case) -> MSG_BAD_TYPE
+
+
+    if ($error === '') {
+        // TODO 2: read the photo's width and height from the uploaded file itself
+
+
+        // TODO 3: $orientation - 'Landscape', 'Portrait' or 'Square', from the
+        //         ratio of its width to its height
+
+
+        // TODO 4: $newWidth and $newHeight - shrink the photo so its LONGEST side is
+        //         GALLERY_PX, keeping the same ratio, rounded to whole pixels. A photo
+        //         that already fits keeps its own size: never make a photo bigger.
+
+
+        // TODO 5: move the photo into the uploads folder with its name in lowercase
+        //         ("Sunset.JPG" becomes "uploads/sunset.jpg"), and set $savedAs to that
+        //         path - but only if the move actually worked
+
+    }
+}
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Island Lens - Upload a Photo</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="card">
+    <p class="badge">Island Lens · Part 1 of 4</p>
+    <h1>📷 Upload your photo</h1>
+    <p>JPG or PNG, up to 1 MB. Gallery photos are shown at up to 800 px on their longest side.</p>
+    <form method="post" enctype="multipart/form-data">
+      <label>Photo <input type="file" name="photo" accept="image/*"></label>
+      <button type="submit">Upload</button>
+    </form>
+
+    <?php if ($submitted): ?>
+    <table class="receipt">
+      <tr><th>Saved as</th><td><?php echo $savedAs !== '' ? htmlspecialchars($savedAs) : '-'; ?></td></tr>
+      <tr class="total"><th>Result</th><td><?php echo $error !== '' ? $error : "$orientation, $newWidth x $newHeight"; ?></td></tr>
+    </table>
+    <?php endif; ?>
+  </main>
+</body>
+</html>
+` },
+      { name: "style.css", editable: false, code: ISLAND_CSS },
+    ],
+  },
+  il2: {
+    title: "Island Lens Lab, Part 2 of 4 – Dates & Times",
+    preview: true,
+    functions: LAB_DATE_FUNCS,
+    tests: [
+      {"label": "Wednesday Oct 28, 10:00 am", "input": {"entered": "2026-10-28T10:00"}, "expectFinal": "5.00", "expectContains": ["Wednesday, October 28, 2026 at 10:00 am", "Early bird", "9 days, 7 hours", "Fri, Nov 20"]},
+      {"label": "The very last second of the early bird: Oct 31, 11:59:59 pm", "input": {"entered": "2026-10-31T23:59:59"}, "expectFinal": "5.00", "expectContains": "Early bird"},
+      {"label": "Just after midnight: Nov 1, 12:00 am", "input": {"entered": "2026-11-01T00:00"}, "expectFinal": "8.00", "expectContains": ["Sunday, November 1, 2026 at 12:00 am", "Regular", "5 days, 17 hours"]},
+      {"label": "Exactly at the deadline: Nov 6, 5:00 pm", "input": {"entered": "2026-11-06T17:00"}, "expectFinal": "8.00", "expectContains": ["Regular", "0 days, 0 hours"]},
+      {"label": "One minute late: Nov 6, 5:01 pm", "input": {"entered": "2026-11-06T17:01"}, "expectFinal": "0.00", "expectContains": "Sorry, the contest has closed."},
+      {"label": "Before it opens: Oct 25, 12:00 pm", "input": {"entered": "2026-10-25T12:00"}, "expectFinal": "0.00", "expectContains": ["The contest is not open yet.", "Sunday, October 25, 2026 at 12:00 pm"]},
+    ],
+    hints: [
+      "format() builds text from letters that each stand for one part of a date. Look up the ones for the full day name, the full month name, the day without a leading zero, the 12-hour hour and am/pm. To show a letter as itself (like the a and t in \"at\"), put a backslash in front of it.",
+      "Two DateTime objects can be compared directly with <, <=, > and >=. You don't need to turn them into text or numbers first.",
+      "diff() gives you a DateInterval, and its format() uses codes that start with %: one for the total number of days, another for the hours left over.",
+      "Adding to a DateTime changes that object. Make a copy of the deadline first (clone), so $deadline itself stays the same.",
+    ],
+    files: [
+      { name: "README.md", editable: false, code: `# Island Lens Lab, Part 2 of 4 – Dates & Times (Chapter 8)
+
+**Island Lens** is the college's photo contest. This lab builds four small pages for it, one for each chapter: uploading a photo (Ch 7), working out the entry fee from the date (Ch 8), remembering the photographer with a cookie and a session (Ch 9), and scoring photos safely with exceptions (Ch 10). Each part is its own link and can be done on its own.
+
+## Goal
+The entry fee depends on *when* a photo is entered. Your page takes the date and time the photographer picks, works out their fee, and shows the dates that matter to them.
+
+## What to build
+Fill in the \`// TODO\` sections in \`index.php\`. The contest's three key moments are already \`DateTime\` objects at the top of the file: when it opens, the end of the early-bird price, and the deadline.
+
+1. **Write the entry time out in full**, like *Wednesday, October 28, 2026 at 10:00 am*, using the date format characters from the slides.
+2. **Status and fee.** Compare the entry time with the three key moments. Each boundary is still inside: an entry at exactly 11:59:59 pm on October 31 still gets the early-bird price, and one at exactly 5:00 pm on November 6 is still accepted.
+3. **Time left.** For an accepted entry, show how long was left until the deadline, like *9 days, 7 hours* - in whole days and the hours left over.
+4. **Results day.** The results are announced two weeks after the deadline. Show that day in the short style, like *Mon, Jan 5*, without changing the deadline itself.
+
+## Good to know
+The page runs on Vancouver time (\`date_default_timezone_set()\` at the top). Daylight saving time ends on November 1, and PHP's \`DateTime\` takes care of that for you.
+
+## Testing your code
+Open the **Tests** tab and click **Run tests**. Several tests sit exactly on a boundary - those are the ones to think about.
+
+## Files in this project
+| File | Can I edit it? |
+|---|---|
+| \`index.php\` | ✅ Yes - this is the only file you need to change |
+| \`style.css\` | 🔒 Read-only - provided styling |
+| \`README.md\` | 🔒 Read-only - this file |
+` },
+      { name: "index.php", editable: true, code: `<?php
+// Island Lens Photo Contest - Part 2 of 4: Dates & Times (Chapter 8)
+// Work out the entry fee from WHEN a photo was entered, and show the key dates.
+
+date_default_timezone_set('America/Vancouver');
+
+$opens     = new DateTime('2026-10-26 09:00');     // contest opens
+$earlyEnds = new DateTime('2026-10-31 23:59:59');  // last moment of the early-bird price
+$deadline  = new DateTime('2026-11-06 17:00');     // last moment to enter
+
+const EARLY_FEE   = 5.00;
+const REGULAR_FEE = 8.00;
+
+// Use these exact messages - the tests look for them.
+const MSG_NOT_OPEN = 'The contest is not open yet.';
+const MSG_CLOSED   = 'Sorry, the contest has closed.';
+
+$submitted  = $_SERVER['REQUEST_METHOD'] === 'POST';
+$entered    = '';
+$status     = '';
+$fee        = 0;
+$timeLeft   = '';
+$resultsDay = '';
+
+if ($submitted) {
+    // The date and time the photographer picked, e.g. "2026-10-28T10:00"
+    $when = new DateTime($_POST['entered'] ?? 'now');
+
+    // TODO 1: $entered - $when written out like "Wednesday, October 28, 2026 at 10:00 am"
+
+
+    // TODO 2: $status and $fee, from when the photo was entered:
+    //   before $opens                    -> MSG_NOT_OPEN, no fee
+    //   up to and including $earlyEnds   -> 'Early bird', EARLY_FEE
+    //   up to and including $deadline    -> 'Regular', REGULAR_FEE
+    //   after $deadline                  -> MSG_CLOSED, no fee
+
+
+    // TODO 3: $timeLeft - only for an accepted entry (early bird or regular): the time
+    //         from $when until $deadline, written like "9 days, 7 hours"
+
+
+    // TODO 4: $resultsDay - the results are announced 2 weeks after the deadline.
+    //         Show that day like "Fri, Nov 20"
+
+}
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Island Lens - Entry Fee</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="card">
+    <p class="badge">Island Lens · Part 2 of 4</p>
+    <h1>🗓️ When are you entering?</h1>
+    <p>Early bird $5.00 until the end of October 31. Regular $8.00 until November 6 at 5:00 pm.</p>
+    <form method="post">
+      <label>Entry time <input type="datetime-local" name="entered" value="2026-10-28T10:00" step="1"></label>
+      <button type="submit">Check my fee</button>
+    </form>
+
+    <?php if ($submitted): ?>
+    <table class="receipt">
+      <tr><th>Entered</th><td><?php echo $entered; ?></td></tr>
+      <tr><th>Status</th><td><?php echo $status; ?></td></tr>
+      <tr><th>Time left to enter</th><td><?php echo $timeLeft !== '' ? $timeLeft : '-'; ?></td></tr>
+      <tr><th>Results announced</th><td><?php echo $resultsDay; ?></td></tr>
+      <tr class="total"><th>Entry fee</th><td>$<?php echo number_format($fee, 2); ?></td></tr>
+    </table>
+    <?php endif; ?>
+  </main>
+</body>
+</html>
+` },
+      { name: "style.css", editable: false, code: ISLAND_CSS },
+    ],
+  },
+  il3: {
+    title: "Island Lens Lab, Part 3 of 4 – Cookies & Sessions",
+    preview: true,
+    functions: LAB_STATE_FUNCS,
+    storage: true,
+    tests: [
+      {"label": "First entry from Maya Lee", "input": {"name": "Maya Lee"}, "expectFinal": "8.00", "expectContains": "1 of 3", "expectCookies": {"photographer": "Maya Lee"}, "expectSession": {"entries": 1}},
+      {"label": "Second entry this visit", "input": {"name": "Maya Lee"}, "session": {"entries": 1}, "expectFinal": "8.00", "expectContains": "2 of 3", "expectSession": {"entries": 2}},
+      {"label": "Third entry this visit - half price", "input": {"name": "Maya Lee"}, "session": {"entries": 2}, "expectFinal": "4.00", "expectContains": "3 of 3", "expectSession": {"entries": 3}},
+      {"label": "A fourth entry is refused", "input": {"name": "Maya Lee"}, "session": {"entries": 3}, "expectFinal": "0.00", "expectContains": "You have reached the limit of 3 entries this visit.", "expectSession": {"entries": 3}},
+      {"label": "Blank name - not an entry", "input": {"name": "   "}, "session": {"entries": 1}, "expectFinal": "0.00", "expectContains": "Please enter your name.", "expectCookies": {"photographer": null}, "expectSession": {"entries": 1}},
+      {"label": "Returning visitor (cookie already set), page just opened", "method": "get", "input": {}, "cookies": {"photographer": "Maya Lee"}, "expectContains": "Signed in as Maya Lee"},
+    ],
+    hints: [
+      "session_start() has to run before you read or change $_SESSION, so put it near the top of the file, before any HTML.",
+      "$_COOKIE only holds the cookies the browser sent with this request. A cookie you set now shows up in $_COOKIE on the next request, which is why you also put the typed name into $name yourself.",
+      "setcookie()'s third argument is the moment the cookie expires, as a timestamp: the time now, plus however many seconds it should last.",
+      "Read the count so far (0 if there isn't one yet) and check the limit before you count this entry. The entry number is the count after adding this one.",
+    ],
+    files: [
+      { name: "README.md", editable: false, code: `# Island Lens Lab, Part 3 of 4 – Cookies & Sessions (Chapter 9)
+
+**Island Lens** is the college's photo contest. This lab builds four small pages for it, one for each chapter: uploading a photo (Ch 7), working out the entry fee from the date (Ch 8), remembering the photographer with a cookie and a session (Ch 9), and scoring photos safely with exceptions (Ch 10). Each part is its own link and can be done on its own.
+
+## Goal
+The entry page remembers who the photographer is between visits, with a **cookie**, and counts their entries during this visit, with the **session**.
+
+## What to build
+Fill in the \`// TODO\` sections in \`index.php\`:
+
+1. **Start the session** - every page that uses \`$_SESSION\` needs this.
+2. **Remember the photographer.** If they've been here before, their name is in the \`photographer\` cookie. Use it so the page says *Signed in as ...* and fills in the form for them.
+3. **When the form is sent**, a blank name is an error, not an entry. Otherwise, save the name in the \`photographer\` cookie for 30 days, and use it straight away.
+4. **Count entries** in \`$_SESSION['entries']\`. A visitor can enter up to 3 times per visit: a fourth entry is refused and not counted. Each entry costs $8.00, except that the third one is half price.
+
+## Trying it out
+Click **Run**, type a name and submit a few entries. Open the **Storage** tab to watch the cookie and the session change, like the Application tab in a browser's developer tools:
+- **Clear session** is like closing the browser: the entry count starts again, but the cookie still remembers the name.
+- **Clear cookies** forgets the name.
+
+## Testing your code
+Open the **Tests** tab and click **Run tests**. Each test starts from its own cookie and session - for example "this visitor has already entered twice" - and checks the cookie and session your page leaves behind. Tests never touch what's in your Storage tab.
+
+## Files in this project
+| File | Can I edit it? |
+|---|---|
+| \`index.php\` | ✅ Yes - this is the only file you need to change |
+| \`style.css\` | 🔒 Read-only - provided styling |
+| \`README.md\` | 🔒 Read-only - this file |
+` },
+      { name: "index.php", editable: true, code: `<?php
+// Island Lens Photo Contest - Part 3 of 4: Cookies & Sessions (Chapter 9)
+// Remember who the photographer is between visits (a cookie), and count their
+// entries during this visit (the session).
+
+const FEE         = 8.00;
+const MAX_ENTRIES = 3;
+const COOKIE_DAYS = 30;
+
+// Use these exact messages - the tests look for them.
+const MSG_NO_NAME = 'Please enter your name.';
+const MSG_LIMIT   = 'You have reached the limit of 3 entries this visit.';
+
+$submitted   = $_SERVER['REQUEST_METHOD'] === 'POST';
+$name        = '';
+$message     = '';
+$fee         = 0;
+$entryNumber = 0;
+
+// TODO 1: start the session (or carry on with the one already running)
+
+
+// TODO 2: $name - the name remembered in the 'photographer' cookie, or '' if there isn't one
+
+
+if ($submitted) {
+    $typed = trim($_POST['name'] ?? '');
+
+    // TODO 3: if $typed is blank, $message is MSG_NO_NAME and this is NOT an entry.
+    //         Otherwise remember $typed in the 'photographer' cookie for COOKIE_DAYS days,
+    //         and use it as $name from now on.
+
+
+    // TODO 4: for a real entry, keep count in $_SESSION['entries'] (entries so far this visit):
+    //   - if MAX_ENTRIES have already been entered: $message is MSG_LIMIT, no fee,
+    //     and this one is NOT counted
+    //   - otherwise count it, set $entryNumber, and charge FEE - except that the third
+    //     entry of a visit is half price
+
+}
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Island Lens - Enter the Contest</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="card">
+    <p class="badge">Island Lens · Part 3 of 4</p>
+    <h1>🏝️ Enter the contest</h1>
+    <?php if ($name !== ''): ?>
+      <p class="welcome">Signed in as <?php echo htmlspecialchars($name); ?></p>
+    <?php endif; ?>
+    <p>$8.00 per entry, and your third entry this visit is half price. Up to 3 entries per visit.</p>
+    <form method="post">
+      <label>Your name <input type="text" name="name" value="<?php echo htmlspecialchars($name); ?>"></label>
+      <button type="submit">Submit entry</button>
+    </form>
+
+    <?php if ($submitted): ?>
+    <table class="receipt">
+      <tr><th>Entry</th><td><?php echo $entryNumber > 0 ? $entryNumber . ' of ' . MAX_ENTRIES : '-'; ?></td></tr>
+      <tr><th>Message</th><td><?php echo $message !== '' ? $message : 'Thanks, your entry is in!'; ?></td></tr>
+      <tr class="total"><th>Entry fee</th><td>$<?php echo number_format($fee, 2); ?></td></tr>
+    </table>
+    <?php endif; ?>
+  </main>
+</body>
+</html>
+` },
+      { name: "style.css", editable: false, code: ISLAND_CSS },
+    ],
+  },
+  il4: {
+    title: "Island Lens Lab, Part 4 of 4 – Error Handling",
+    preview: true,
+    functions: LAB_ERROR_FUNCS,
+    tests: [
+      {"label": "Scores \"8, 9.5, 7\"", "input": {"scores": "8, 9.5, 7"}, "expectResult": "8.2", "expectContains": "Checked yes"},
+      {"label": "Scores \"6,7,8\" (a whole-number average)", "input": {"scores": "6,7,8"}, "expectResult": "7.0"},
+      {"label": "Scores \"7, 8,\" (trailing comma)", "input": {"scores": "7, 8,"}, "expectResult": "7.5"},
+      {"label": "Scores \"0, 0, 1\"", "input": {"scores": "0, 0, 1"}, "expectResult": "0.3"},
+      {"label": "Scores \"8, eleven, 9\" (not a number)", "input": {"scores": "8, eleven, 9"}, "expectResult": "Not scored", "expectContains": ["\"eleven\" is not a number.", "Checked yes"]},
+      {"label": "Scores \"8, 12\" (out of range)", "input": {"scores": "8, 12"}, "expectResult": "Not scored", "expectContains": "Scores must be between 0 and 10."},
+      {"label": "No scores at all", "input": {"scores": ""}, "expectResult": "Not scored", "expectContains": ["Enter at least one score.", "Checked yes"]},
+    ],
+    hints: [
+      "Run the starter as it is and read the first error. The line it names is where PHP noticed the problem; for a missing semicolon, that's the line after the mistake.",
+      "explode() splits a string into an array at every comma. Loop over the pieces and trim each one before checking it.",
+      "throw new ScoreException('...') stops averageScore() straight away and jumps to the matching catch block. Nothing after the throw runs.",
+      "finally runs after try, whether it worked or a catch block ran, so it's the place for code that must always happen.",
+    ],
+    files: [
+      { name: "README.md", editable: false, code: `# Island Lens Lab, Part 4 of 4 – Error Handling (Chapter 10)
+
+**Island Lens** is the college's photo contest. This lab builds four small pages for it, one for each chapter: uploading a photo (Ch 7), working out the entry fee from the date (Ch 8), remembering the photographer with a cookie and a session (Ch 9), and scoring photos safely with exceptions (Ch 10). Each part is its own link and can be done on its own.
+
+## Goal
+Judges type their scores for a photo, like \`8, 9.5, 7\`. Your page averages them, and deals with bad input by **throwing and catching an exception** instead of letting the page break.
+
+## What to build
+Fill in the \`// TODO\` sections in \`index.php\`:
+
+1. **Fix the two bugs first.** The starter file doesn't run at all. Click **Run**, read the error message, fix that problem, and run again - the second bug only shows up once the first is fixed. The editor also marks the line each error points to.
+2. **Write \`averageScore()\`.** Split the typed text at the commas and trim each piece, skipping blank pieces (like the one after a trailing comma). Throw a \`ScoreException\` when:
+   - there are no scores at all,
+   - a piece isn't a number - the message quotes that piece, like \`"eleven" is not a number.\`
+   - a score is below 0 or above 10.
+
+   Otherwise, return the average rounded to 1 decimal place.
+3. **Use it safely.** Call \`averageScore()\` inside \`try\` / \`catch\` / \`finally\`. On success, show the average with exactly 1 decimal place (so 8 shows as 8.0). If a \`ScoreException\` is caught, show *Not scored* and the exception's message. Either way, the \`finally\` block marks the scores as checked.
+
+## Why an exception?
+\`averageScore()\` finds the problem, but it doesn't know how the page wants to show it. Throwing hands the problem back to the code that called it, and the \`catch\` block decides what the visitor sees.
+
+## Testing your code
+Open the **Tests** tab and click **Run tests**. Three of the seven tests use bad input on purpose, and expect *Not scored* with the right message.
+
+## Files in this project
+| File | Can I edit it? |
+|---|---|
+| \`index.php\` | ✅ Yes - this is the only file you need to change |
+| \`style.css\` | 🔒 Read-only - provided styling |
+| \`README.md\` | 🔒 Read-only - this file |
+` },
+      { name: "index.php", editable: true, code: `<?php
+// Island Lens Photo Contest - Part 4 of 4: Error Handling (Chapter 10)
+// Judges type their scores for a photo, like "8, 9.5, 7". Average them, and handle
+// bad input with an exception instead of letting the page break.
+
+// TODO 1: this file has TWO bugs that stop it from running at all. Click Run, read
+//         the error message (the editor also marks the line it points to), and fix
+//         each one. Hint: a parse error is often reported on the line AFTER the mistake.
+
+class ScoreException extends Exception {}
+
+const MIN_SCORE = 0;
+const MAX_SCORE = 10;
+
+// Use these exact messages - the tests look for them.
+const MSG_NO_SCORES = 'Enter at least one score.';
+const MSG_RANGE     = 'Scores must be between 0 and 10.';
+
+// Returns the average of the scores typed in $input, rounded to 1 decimal place.
+function averageScore(string $input): float
+{
+    // TODO 2: split $input at the commas and trim each piece, ignoring blank pieces
+    //         (like the one after a trailing comma). Then throw a ScoreException:
+    //   - MSG_NO_SCORES                    if there are no scores at all
+    //   - '"eleven" is not a number.'      for a piece that isn't a number
+    //                                      (using that piece in the message)
+    //   - MSG_RANGE                        for a number below MIN_SCORE or above MAX_SCORE
+    //   If every score is fine, return their average rounded to 1 decimal place.
+
+}
+
+$submitted = $_SERVER['REQUEST_METHOD'] === 'POST';
+$result    = '';
+$problem   = '';
+$checked   = false
+
+if ($submitted) {
+    // TODO 3: call averageScore() with the submitted scores, using try / catch / finally:
+    //   - if it works, $result is the average shown with 1 decimal place, like "8.0"
+    //   - if a ScoreException is thrown, $result is 'Not scored' and $problem is
+    //     the exception's message
+    //   - either way, set $checked to true in the finally block
+
+}
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Island Lens - Judging</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="card">
+    <p class="badge">Island Lens · Part 4 of 4</p>
+    <h1>⭐ Judges' scores</h1>
+    <p>Enter each judge's score from 0 to 10, separated by commas.</p>
+    <form method="post">
+      <label>Scores <input type="text" name="scores" value="<?php echo htmlspecialchar($_POST['scores'] ?? ''); ?>"></label>
+      <button type="submit">Score this photo</button>
+    </form>
+
+    <?php if ($submitted): ?>
+    <?php if ($problem !== ''): ?>
+      <div class="errorBox"><?php echo htmlspecialchars($problem); ?></div>
+    <?php endif; ?>
+    <table class="receipt">
+      <tr><th>Checked</th><td><?php echo $checked ? 'yes' : 'no'; ?></td></tr>
+      <tr class="total"><th>Average score</th><td><?php echo $result; ?></td></tr>
+    </table>
+    <?php endif; ?>
+  </main>
+</body>
+</html>
+` },
+      { name: "style.css", editable: false, code: ISLAND_CSS },
+    ],
+  },
   blank: {
     title: "Blank PHP Editor",
     preview: false,
@@ -1469,11 +2036,17 @@ button{margin-top:6px;padding:8px 16px;background:#2f6fed;color:#fff;border:0;bo
 // set, while the full library keeps living in this one file across every exam. 'blank' is
 // always kept available as a safety net regardless of this list.
 //
-// Restricted to this quiz's two movie-themed sets only, so students can't stumble onto the
-// "Bonus - Movie Night Order" template question below (left in the file for future reuse,
-// but hidden from the picker and from direct ?q=movie1 links while this is in effect).
-const EXAM_SET = ["mv1a", "mv1b", "mv1c", "mv2a", "mv2b", "mv2c"];
+// This week's Island Lens lab first (so its Part 1 is what opens by default), then the two
+// Movie Night quiz sets for review. The "Bonus - Movie Night Order" template question stays
+// in the file for future reuse, but hidden from the picker and from direct ?q=movie1 links.
+const EXAM_SET = [
+  "il1", "il2", "il3", "il4", // Island Lens lab (Chapters 7-10)
+  "mv1a", "mv1b", "mv1c", "mv2a", "mv2b", "mv2c",
+];
 if (EXAM_SET.length) {
-  for (const k in QUESTIONS)
-    if (k !== "blank" && !EXAM_SET.includes(k)) delete QUESTIONS[k];
+  // Rebuilt in EXAM_SET's order - the picker lists questions in object key order.
+  const kept = {};
+  for (const k of EXAM_SET.concat("blank")) if (QUESTIONS[k]) kept[k] = QUESTIONS[k];
+  for (const k in QUESTIONS) delete QUESTIONS[k];
+  Object.assign(QUESTIONS, kept);
 }
