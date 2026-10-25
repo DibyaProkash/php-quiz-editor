@@ -309,3 +309,14 @@ li.CodeMirror-hint-active .cm-hint-doc{color:var(--accent-contrast)}
 }
 
 @media(max-width:800px){main{grid-template-columns:1fr;grid-template-rows:auto 1fr 1fr}.explorer .list{flex-direction:row;flex-wrap:wrap}.fitem{width:auto}.explorer{border-right:0;border-bottom:1px solid var(--line)}.editor{border-right:0;border-bottom:1px solid var(--line)}}
+
+/* File viewer for sample and saved files (media.js) - takes the code editor's place */
+#mediaView{flex:1;min-height:0;overflow:auto;padding:14px 16px;display:flex;flex-direction:column;gap:12px}
+.mediaHead{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+.mediaMeta{color:var(--muted);font-size:12.5px;margin-top:3px}
+.mediaBtns{display:flex;gap:8px}
+.mediaBtns button{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;padding:5px 10px}
+.mediaImg{flex:1;min-height:160px;display:flex;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:6px;padding:10px;
+  background:repeating-conic-gradient(var(--sunken) 0% 25%,transparent 0% 50%) 50%/20px 20px}
+.mediaImg img{max-width:100%;max-height:100%;object-fit:contain}
+.mediaText{margin:0;padding:10px 12px;background:var(--sunken);border:1px solid var(--line);border-radius:6px;font-size:12.5px;white-space:pre-wrap;overflow:auto}

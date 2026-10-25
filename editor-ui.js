@@ -85,8 +85,9 @@ function renderTabs() {
     const f = metaOf(n);
     if (renaming === n) return renameRow(n, false, depth);
     const row = document.createElement('div'), b = document.createElement('button');
-    row.className = 'frow' + (n === cur ? ' cur' : '');
-    b.className = 'fitem' + (n === cur ? ' on' : ''); b.style.paddingLeft = (14 + depth * 14) + 'px';
+    const isCur = n === cur && !(typeof mediaCur !== 'undefined' && mediaCur);
+    row.className = 'frow' + (isCur ? ' cur' : '');
+    b.className = 'fitem' + (isCur ? ' on' : ''); b.style.paddingLeft = (14 + depth * 14) + 'px';
     b.innerHTML = icon(n) + '<span>' + esc(baseOf(n)) + '</span>' + (f.editable ? '' : '<span class="ro">read-only</span>');
     b.onclick = () => showFile(n);
     row.appendChild(b);
@@ -103,11 +104,15 @@ function renderTabs() {
   (function renderDir(dir, depth) {
     dirs.filter(d => dirOf(d) === dir).forEach(d => { ex.appendChild(folderRow(d, depth)); if (open.has(d)) renderDir(d, depth + 1); });
     names.filter(n => dirOf(n) === dir).forEach(n => ex.appendChild(fileRow(n, depth)));
+    if (typeof mediaIn === 'function') mediaIn(dir).forEach(n => ex.appendChild(mediaRow(n, depth)));
   })('', 0);
   const rn = ex.querySelector('.rn');
   if (rn) { rn.focus(); const dot = rn.value.lastIndexOf('.'); rn.setSelectionRange(rn.value.lastIndexOf('/') + 1, dot > 0 ? dot : rn.value.length); }
-  $('filetabs').innerHTML = '<div class="ftab">' + icon(cur) + '<span>' + esc(cur) + '</span></div>' +
-    (f0.editable ? '' : '<span class="note">You do not need to edit this file</span>');
+  const viewing = typeof mediaCur !== 'undefined' && mediaCur;
+  $('filetabs').innerHTML = viewing
+    ? '<div class="ftab">' + icon(mediaCur) + '<span>' + esc(mediaCur) + '</span></div><span class="note">Not a code file</span>'
+    : '<div class="ftab">' + icon(cur) + '<span>' + esc(cur) + '</span></div>' +
+      (f0.editable ? '' : '<span class="note">You do not need to edit this file</span>');
   $('run').title = 'Runs ' + mainName + ' (Ctrl+Enter)';
 }
 function view(v) {
@@ -136,6 +141,8 @@ function loadQuestion() {
   // for a file-upload exercise) until the student has saved a folder list of their own.
   folders = load('folders:' + key) === null ? (q.folders || []).slice() : list('folders');
   custom.forEach(n => { docs[n] = CodeMirror.Doc(load('f:' + key + ':' + n) ?? blankOf(n), modeOf(n)); });
+  // Sample and saved files (media.js): reset now, samples arrive a moment later.
+  if (typeof loadMedia === 'function') loadMedia();
   open = new Set(allFolders()); selDir = ''; renaming = null; trash = []; updTrash();
   const savedMain = load('main:' + key);
   mainName = savedMain && docs[savedMain] && savedMain.endsWith('.php') ? savedMain : defaultMain();

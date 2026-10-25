@@ -344,10 +344,12 @@ async function runDebug() {
         "/" + n,
         n.endsWith(".php") ? fix(docs[n].getValue()) : docs[n].getValue(),
       );
+    await writeMedia(engine); // sample + saved files (media.js)
     const wr = webRequest(req);
     await prepareWebRequest(engine, wr);
     await engine.run(wrapDebug(instrumented, $("stdin").value, wr));
     persistWebState(await readWebState(engine));
+    await collectSavedFiles(engine);
     const marker = "\n<<<DBGTRACE>>>";
     const idx = sinkText.indexOf(marker);
     let trace = [],

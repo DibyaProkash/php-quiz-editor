@@ -1242,6 +1242,16 @@ if ($submitted) {
     preview: true,
     functions: LAB_FILE_FUNCS,
     folders: ["uploads"],
+    // Test files in uploads/samples, one per rule - drawn when the question opens (media.js),
+    // and padded to these exact byte sizes so the size checks behave the same everywhere.
+    samples: [
+      { name: "uploads/samples/harbour-sunset.jpg", width: 1366, height: 768, scene: "sunset", size: 430080 },
+      { name: "uploads/samples/tall-cedar.png", width: 900, height: 1500, scene: "forest", size: 307200 },
+      { name: "uploads/samples/lighthouse.png", width: 640, height: 640, scene: "lighthouse", size: 204800 },
+      { name: "uploads/samples/eagle-1.5mb.jpg", width: 3000, height: 2000, scene: "sky", size: 1572864 },
+      { name: "uploads/samples/whale-3mb.jpg", width: 4000, height: 3000, scene: "sea", size: 3145728 },
+      { name: "uploads/samples/entry-form.pdf", title: "Island Lens entry form", size: 51200 },
+    ],
     tests: [
       {"label": "sunset.jpg - 1366 × 768, 420 KB", "files": {"photo": {"name": "sunset.jpg", "width": 1366, "height": 768, "size": 430080}}, "expectResult": "Landscape, 800 x 450", "expectContains": "uploads/sunset.jpg"},
       {"label": "Forest.PNG - 900 × 1500, 300 KB", "files": {"photo": {"name": "Forest.PNG", "width": 900, "height": 1500, "size": 307200}}, "expectResult": "Portrait, 480 x 800", "expectContains": "uploads/forest.png"},
@@ -1279,7 +1289,7 @@ Fill in the \`// TODO\` sections in \`index.php\`:
 A 1500 × 1200 photo has a ratio of 1500 ÷ 1200 = 1.25, so it's landscape. Its longest side, 1500, becomes 800, so its height becomes 800 ÷ 1.25 = 640. The result is **Landscape, 800 x 640**.
 
 ## Trying it out
-Click **Run**, choose a photo from your computer, and click **Upload**. The form already has what a file upload needs: \`method="post"\` and \`enctype="multipart/form-data"\`. Without that enctype, a browser only sends the file's *name*. Like a default PHP server, the editor refuses uploads over 2 MB before your code even runs, and tells you through the upload's error code.
+Click **Run**, choose a photo from your computer, and click **Upload**. No photo handy? The \`uploads/samples\` folder has six test files, one for each rule: click one to see it, **Download** it, then choose it in your page's upload form. Once your code saves a photo, it shows up in \`uploads/\` too, where you can click it to check it. The form already has what a file upload needs: \`method="post"\` and \`enctype="multipart/form-data"\`. Without that enctype, a browser only sends the file's *name*. Like a default PHP server, the editor refuses uploads over 2 MB before your code even runs, and tells you through the upload's error code.
 
 ## Testing your code
 Open the **Tests** tab and click **Run tests**. The tests make up their own uploads - different sizes, shapes and file types - so they don't need a real photo.

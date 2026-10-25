@@ -12,6 +12,12 @@ ICON_SVG.folder =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path fill="#c09553" d="M27.5 5.5h-9.3l-2.1 4.2H4.4v16.8h25.2v-21Zm0 4.2h-8.2l1.1-2.1h7.1Z"/></svg>';
 ICON_SVG.folderOpen =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path fill="#dcb67a" d="M27.4 5.5h-9.2l-2.1 4.2H4.3v16.8h25.2v-21Zm0 18.7H6.6V11.8h20.8Zm0-14.5h-8.2l1-2.1h7.1v2.1Z"/><path fill="#dcb67a" d="M25.7 13.7H.5l3.8 12.8h25.2z"/></svg>';
+// Image and PDF files (sample and saved files - media.js).
+ICON_SVG.png =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect x="3" y="5" width="26" height="22" rx="2" fill="#26a69a"/><circle cx="11" cy="12" r="3" fill="#fff59d"/><path fill="#e0f2f1" d="M5 25l8-9 5 6 3-3 6 6z"/></svg>';
+ICON_SVG.jpg = ICON_SVG.jpeg = ICON_SVG.gif = ICON_SVG.webp = ICON_SVG.png;
+ICON_SVG.pdf =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path fill="#e53935" d="M6 2h14l7 7v21H6z"/><path fill="#ffcdd2" d="M20 2v7h7z"/><text x="16" y="24" font-family="Arial" font-size="8" font-weight="700" fill="#fff" text-anchor="middle">PDF</text></svg>';
 const ICON_URI = {};
 for (const k in ICON_SVG)
   ICON_URI[k] = "data:image/svg+xml;base64," + btoa(ICON_SVG[k]);

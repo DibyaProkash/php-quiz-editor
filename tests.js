@@ -33,6 +33,7 @@ async function runOneTest(t) {
       { m: t.method || "post", d: t.input || {} },
       { cookies: t.cookies, session: t.session, files: t.files },
     );
+    await writeMedia(engine); // sample + saved files exist for tests too; tests never save any
     await prepareWebRequest(engine, wr);
     await engine.run(wrap(docs[main].getValue(), "", wr));
     state = await readWebState(engine);

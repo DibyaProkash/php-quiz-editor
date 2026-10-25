@@ -86,6 +86,8 @@ function allFolders() {
   const set = new Set();
   folders.forEach((f) => ancestors(f + "/x").forEach((a) => set.add(a)));
   custom.forEach((n) => ancestors(n).forEach((a) => set.add(a)));
+  // sample and saved files (media.js) live in folders too
+  if (typeof media !== "undefined") media.forEach((m, n) => ancestors(n).forEach((a) => set.add(a)));
   return [...set].sort();
 }
 const saveCustom = () => {
@@ -98,6 +100,7 @@ function setMain(path, render = true) {
   if (render) renderTabs();
 }
 function showFile(name) {
+  if (typeof hideMedia === "function") hideMedia(); // back from the file viewer (media.js)
   cur = name;
   selDir = dirOf(name);
   cm.swapDoc(docs[name]);

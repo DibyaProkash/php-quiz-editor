@@ -252,10 +252,12 @@ async function run() {
         "/" + n,
         n.endsWith(".php") ? fix(docs[n].getValue()) : docs[n].getValue(),
       );
+    await writeMedia(engine); // sample + saved files (media.js)
     const wr = webRequest(req);
     await prepareWebRequest(engine, wr);
     await engine.run(wrap(docs[main].getValue(), $("stdin").value, wr));
     persistWebState(await readWebState(engine));
+    await collectSavedFiles(engine);
   } catch (err) {
     sinkErrs += String((err && err.message) || err);
     php = null; // the instance may be in a broken state after a JS-level failure; rebuild next run
