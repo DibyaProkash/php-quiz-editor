@@ -2036,12 +2036,12 @@ button{margin-top:6px;padding:8px 16px;background:#2f6fed;color:#fff;border:0;bo
 // set, while the full library keeps living in this one file across every exam. 'blank' is
 // always kept available as a safety net regardless of this list.
 //
-// This week's Island Lens lab first (so its Part 1 is what opens by default), then the two
-// Movie Night quiz sets for review. The "Bonus - Movie Night Order" template question stays
-// in the file for future reuse, but hidden from the picker and from direct ?q=movie1 links.
+// Only this week's Island Lens lab (plus the always-available blank editor). The Movie
+// Night quiz sets (mv1a-mv2c) and the "Bonus - Movie Night Order" template stay defined
+// above for future reuse, but are hidden from the picker and from direct ?q= links - add
+// their keys back here to offer them again.
 const EXAM_SET = [
   "il1", "il2", "il3", "il4", // Island Lens lab (Chapters 7-10)
-  "mv1a", "mv1b", "mv1c", "mv2a", "mv2b", "mv2c",
 ];
 if (EXAM_SET.length) {
   // Rebuilt in EXAM_SET's order - the picker lists questions in object key order.
