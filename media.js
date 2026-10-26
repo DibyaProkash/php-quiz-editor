@@ -193,6 +193,31 @@ async function loadMedia() {
   }
   if (samples.length) renderTabs();
 }
+// Reset / Undo reset (editor-ui.js): everything a question's PHP code has stored besides its
+// files - cookies, session, and the photos it saved - is taken as one snapshot, wiped, and
+// can be put back.
+function takeWebData() {
+  const snap = {};
+  const add = (k) => {
+    const v = load(k);
+    if (v != null) snap[k] = v;
+  };
+  ["jar:" + key, "sess:" + key, "sessraw:" + key, "media:" + key].forEach(add);
+  try {
+    for (const n of JSON.parse(load("media:" + key) || "[]")) add("mf:" + key + ":" + n);
+  } catch (e) {}
+  return snap;
+}
+function clearWebData(snap) {
+  Object.keys(snap).forEach((k) => store(k));
+}
+function restoreWebData(snap) {
+  Object.keys(snap).forEach((k) => store(k, snap[k]));
+  return loadMedia().then(() => {
+    renderTabs();
+    if (typeof renderStoragePanel === "function") renderStoragePanel();
+  });
+}
 const mediaIn = (dir) => [...media.keys()].filter((n) => dirOf(n) === dir).sort((a, b) => a.localeCompare(b));
 
 // ---------- the PHP engine's copy ----------

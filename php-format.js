@@ -25,15 +25,17 @@
 // any other bit of HTML text - and swap the original comment back in afterward. That
 // keeps the exact class of tag that triggered the duplication bug completely out of
 // Prettier's hands, while every real statement still gets fully, properly formatted.
-const PRETTIER_JS = 'https://cdn.jsdelivr.net/npm/prettier@3.9.9/standalone.js';
-const PRETTIER_PHP_JS = 'https://cdn.jsdelivr.net/npm/@prettier/plugin-php@0.25.0/standalone.js';
+// vendor/ first, CDN as the fallback.
+const PRETTIER_JS = ['vendor/prettier/standalone.js', 'https://cdn.jsdelivr.net/npm/prettier@3.9.9/standalone.js'];
+const PRETTIER_PHP_JS = ['vendor/prettier-plugin-php/standalone.js', 'https://cdn.jsdelivr.net/npm/@prettier/plugin-php@0.25.0/standalone.js'];
 
-function loadScript(src) {
-  return new Promise((resolve, reject) => {
+function loadScript(srcs) {
+  const one = src => new Promise((resolve, reject) => {
     const s = document.createElement('script');
-    s.src = src; s.onload = () => resolve(); s.onerror = () => reject(new Error('Could not load ' + src));
+    s.src = src; s.onload = () => resolve(); s.onerror = () => { s.remove(); reject(new Error('Could not load ' + src)); };
     document.head.appendChild(s);
   });
+  return srcs.reduce((p, src) => p.catch(() => one(src)), Promise.reject());
 }
 let prettierReady = null;
 function ensurePrettier() {

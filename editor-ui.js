@@ -218,7 +218,7 @@ function ask(title, body, yesText, fn) {
 const closeDlg = () => { $('veil').hidden = true; onYes = null; if (lastFocus && lastFocus.isConnected) lastFocus.focus(); };
 
 $('reset').onclick = () => ask('Reset all code?',
-  'This replaces the starter files with the original code and deletes any files and folders you created. You can use Undo reset right afterwards if you change your mind.',
+  'This replaces the starter files with the original code and deletes any files and folders you created, plus any photos, cookies and session data your code saved. You can use Undo reset right afterwards if you change your mind.',
   'Yes, reset everything', doReset);
 $('no').onclick = closeDlg;
 $('yes').onclick = () => { const fn = onYes; $('veil').hidden = true; onYes = null; if (fn) fn(); };
@@ -233,7 +233,9 @@ function doReset() {
   const snap = { files: {}, custom: custom.slice(), folders: folders.slice(), main: mainName, stdin: $('stdin').value };
   allNames().forEach(n => { snap.files[n] = docs[n].getValue(); store('f:' + key + ':' + n); });
   ['stdin', 'custom', 'folders', 'main'].forEach(k => store(k + ':' + key));
+  snap.web = takeWebData(); clearWebData(snap.web); // photos, cookies and session go too
   loadQuestion();
+  if (typeof renderStoragePanel === 'function') renderStoragePanel();
   undoSnap = snap; $('undoReset').hidden = false;
 }
 $('undoReset').onclick = () => {
@@ -249,6 +251,7 @@ $('undoReset').onclick = () => {
   if (docs[snap.main]) setMain(snap.main, false);
   $('stdin').value = snap.stdin; store('stdin:' + key, snap.stdin);
   showFile(cur);
+  if (snap.web) restoreWebData(snap.web);
 };
 $('undoDelete').onclick = undoDelete;
 

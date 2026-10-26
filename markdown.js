@@ -10,18 +10,23 @@
 // DOMPurify (https://github.com/cure53/DOMPurify) sanitizes that HTML before it's
 // ever inserted into the page - important since Markdown can contain raw HTML, and a
 // student-created .md file is still untrusted input.
-const MARKED_JS = "https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js";
-const DOMPURIFY_JS =
-  "https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js";
+// Each library is tried from vendor/ first, then from the CDN.
+const MARKED_JS = ["vendor/marked/marked.min.js", "https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"];
+const DOMPURIFY_JS = ["vendor/dompurify/purify.min.js", "https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"];
 
-function loadMdScript(src) {
-  return new Promise((resolve, reject) => {
-    const s = document.createElement("script");
-    s.src = src;
-    s.onload = () => resolve();
-    s.onerror = () => reject(new Error("Could not load " + src));
-    document.head.appendChild(s);
-  });
+function loadMdScript(srcs) {
+  const one = (src) =>
+    new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = src;
+      s.onload = () => resolve();
+      s.onerror = () => {
+        s.remove();
+        reject(new Error("Could not load " + src));
+      };
+      document.head.appendChild(s);
+    });
+  return srcs.reduce((p, src) => p.catch(() => one(src)), Promise.reject());
 }
 let markdownLibsReady = null;
 function ensureMarkdownLibs() {

@@ -256,7 +256,7 @@ async function run() {
       throw new Error(
         "The PHP engine could not be loaded (" +
           (window.__phpErr || "unknown error") +
-          "). Check your connection or that cdn.jsdelivr.net is allowed.",
+          "). Reload the page; if it keeps happening, check your connection.",
       );
     const engine = await getPhp(q.sql);
     await syncProjectFiles(engine); // project + sample/saved files, nothing stale (media.js)
