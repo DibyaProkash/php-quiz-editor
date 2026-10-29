@@ -59,6 +59,8 @@ function pageText(html) {
 //   expectFinal    "12.50"   the $ amount in the class="total" row (the original kind)
 //   expectResult   "8.2"     the full text of the class="total" row's value cell
 //   expectContains "..."     text (or a list of texts) that must appear on the page
+//   expectNotContains "..."  text (or a list of texts) that must NOT appear on the page
+//   expectLink     "page.php?id=3"  a link (or a list of links) whose href is exactly this
 //   expectCookies  {n: "v"}  cookies the page set; null = must have been deleted / not set
 //   expectSession  {k: v}    $_SESSION values when the page finished (null = key absent)
 function testChecks(t, text, state) {
@@ -86,6 +88,17 @@ function testChecks(t, text, state) {
     const page = pageText(text);
     for (const want of [].concat(t.expectContains))
       out.push({ label: "page shows", want, actual: page.includes(want) ? want : "(not on the page)", ok: page.includes(want) });
+  }
+  if (t.expectNotContains !== undefined) {
+    const page = pageText(text);
+    for (const bad of [].concat(t.expectNotContains))
+      out.push({ label: "page does not show", want: bad, actual: page.includes(bad) ? bad : "(not on the page)", ok: !page.includes(bad) });
+  }
+  if (t.expectLink !== undefined) {
+    const doc = new DOMParser().parseFromString(text, "text/html");
+    const hrefs = [...doc.querySelectorAll("a[href]")].map((a) => a.getAttribute("href"));
+    for (const want of [].concat(t.expectLink))
+      out.push({ label: "link to", want, actual: hrefs.includes(want) ? want : "(no such link)", ok: hrefs.includes(want) });
   }
   if (t.expectCookies) {
     const set = {};

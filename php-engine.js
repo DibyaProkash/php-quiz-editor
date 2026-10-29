@@ -20,13 +20,13 @@ const phpReady = import("./vendor/php-wasm/PhpWeb.mjs")
 let pgliteLoading = null;
 function loadPGlite() {
   if (!pgliteLoading) {
-    pgliteLoading =
-      import("https://cdn.jsdelivr.net/npm/@electric-sql/pglite@0.5.8/dist/index.js").catch(
-        (err) => {
-          pgliteLoading = null;
-          throw err;
-        },
-      );
+    // Local copy first (works offline / on a locked-down school network), CDN as a fallback.
+    pgliteLoading = import("./vendor/pglite/index.js")
+      .catch(() => import("https://cdn.jsdelivr.net/npm/@electric-sql/pglite@0.5.8/dist/index.js"))
+      .catch((err) => {
+        pgliteLoading = null;
+        throw err;
+      });
   }
   return pgliteLoading;
 }

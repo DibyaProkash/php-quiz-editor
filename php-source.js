@@ -135,6 +135,9 @@ const FIX_RULES = [
   [/(?<![\w$\\])(?<!->)(?<!::)\\?move_uploaded_file\s*\(/gi, "__muf("],
   [/(?<![\w$\\])(?<!->)(?<!::)\\?is_uploaded_file\s*\(/gi, "__iuf("],
   [/(?<![\w$\\])(?<!->)(?<!::)\\?mime_content_type\s*\(/gi, "__mct("],
+  [/(?<![\w$\\])(?<!->)(?<!::)\\?filter_input_array\s*\(/gi, "__fia("],
+  [/(?<![\w$\\])(?<!->)(?<!::)\\?filter_input\s*\(/gi, "__fi("],
+  [/(?<![\w$\\])(?<!->)(?<!::)\\?filter_has_var\s*\(/gi, "__fhv("],
   [/(?<![\w$\\])(?<!->)(?<!::)\b(?:exit|die)\b\s*(\(|;)/gi, (m, p) => (p === "(" ? "__ee(" : "__ee();")],
 ];
 function fixSource(code) {

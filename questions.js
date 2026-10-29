@@ -269,6 +269,22 @@ const ISLAND_CSS =
   movieCss("#0e2f36", "#2a5a63", "#cdeee4", "#0b4a3c", "#1f7a6d", "#5f7f84", "#dce8e6") +
   ".welcome{margin:0 0 12px;padding:8px 12px;border-radius:6px;background:#e6f4f1;color:#0b4a3c;font-weight:600}\n";
 
+const TRAIL_CSS =
+  movieCss("#12301f", "#2f6a47", "#d6f0e0", "#0e4a2a", "#2a7d4f", "#5f8a70", "#dfece3") +
+  ".card.wide{max-width:680px}\n.trails{width:100%;margin-top:14px;border-collapse:collapse}\n.trails th{text-align:left;color:#5f8a70;font-weight:600}\n.trails th,.trails td{padding:7px 6px;border-bottom:1px solid #dfece3}\n.trails a{color:#1e6b43;font-weight:600}\nul{padding-left:20px}\n";
+const TRAIL_FUNCS = [
+  { sig: "$pdo->query(string $sql): PDOStatement", desc: "Runs an SQL query that has no changing values in it and gives back a PDOStatement.", example: "$statement = $pdo->query(\"SELECT name FROM trail\");" },
+  { sig: "PDOStatement::fetchAll(): array", desc: "Gets ALL the rows of the result as an array of rows (an empty array if there are none).", example: "$trails = $statement->fetchAll();\n// [0 => ['name' => '...'], 1 => ['name' => '...']]" },
+  { sig: "PDOStatement::fetch(): array|false", desc: "Gets ONE row of the result as an array, or false if there is no row.", example: "$trail = $statement->fetch();\necho $trail['name'];" },
+  { sig: "$pdo->prepare(string $sql): PDOStatement", desc: "Prepares an SQL query that has placeholders (like :id) for values that change.", example: "$statement = $pdo->prepare(\"SELECT * FROM trail WHERE id = :id\");" },
+  { sig: "PDOStatement::execute(array $values): bool", desc: "Runs a prepared statement, giving a value for each placeholder.", example: "$statement->execute(['id' => 3]);" },
+  { sig: "filter_input(int $type, string $name, int $filter): mixed", desc: "Reads one value from the web address (INPUT_GET) and checks it. With FILTER_VALIDATE_INT it gives back the whole number, false if it isn't one, or null if the value is missing.", example: "$id = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);" },
+  { sig: "count(Countable|array $value): int", desc: "Counts how many elements are in an array.", example: "count([])\n// 0" },
+  { sig: "number_format(float $num, int $decimals = 0): string", desc: "Writes a number with a fixed number of decimal places.", example: "number_format(5, 1)\n// \"5.0\"" },
+  { sig: "round(float $num, int $precision = 0): float", desc: "Rounds to a number of decimal places.", example: "round(6.9593, 1)\n// 7.0" },
+  { sig: "htmlspecialchars(string $string): string", desc: "Makes text safe to print inside HTML, so characters like < and & can't break the page.", example: "echo htmlspecialchars($trail['name']);" },
+];
+
 const QUESTIONS = {
   mv1a: {
     title: "Movie Night Set 1, Part 1 of 3 – Classes and Objects (3 pts)",
@@ -1764,6 +1780,368 @@ if ($submitted) {
       { name: "style.css", editable: false, code: ISLAND_CSS },
     ],
   },
+  tf1: {
+    title: "Trail Finder Lab, Part 1 of 2 – The Trail List",
+    preview: true,
+    sql: true,
+    functions: TRAIL_FUNCS,
+    tests: [
+      {"label": "The list shows all 8 trails", "method": "get", "input": {}, "expectContains": ["Trails found: 8", "Raven Lake Trail Strathcona Park 11.2 Hard"]},
+      {"label": "Shortest trail comes first", "method": "get", "input": {}, "expectContains": "Heron Marsh Loop Comox Valley 1.9 Easy Tidewater Boardwalk Comox Valley 2.8 Easy"},
+      {"label": "Sorted all the way down", "method": "get", "input": {}, "expectContains": "Cedar Ridge Loop Comox Valley 6.4 Moderate Bluff Point Scramble Strathcona Park 8.9 Hard Raven Lake Trail"},
+      {"label": "Distances show one decimal place", "method": "get", "input": {}, "expectContains": "Old Mill Rail Trail Cumberland 5.0 Easy"},
+      {"label": "Each trail name links to its details page", "method": "get", "input": {}, "expectLink": ["trail.php?id=3", "trail.php?id=8"]},
+      {"label": "The longest trail is shown", "method": "get", "input": {}, "expectContains": "Longest trail: Raven Lake Trail (11.2 km)"},
+    ],
+    hints: [
+      "A join needs two things: the table you are joining (JOIN region) and how the rows match up (ON trail.region_id = region.id). Look at the slides for the SELECT ... FROM ... JOIN pattern, and use ORDER BY to sort.",
+      "Both tables have a column called name. Give them different names with AS (for example trail.name AS trail_name) or one overwrites the other in the PHP array.",
+      "A query that returns many rows ends with fetchAll(); a query you only expect one row from ends with fetch(). For the longest trail, sort the other way (DESC) and take only one row (LIMIT 1).",
+      "number_format($number, 1) writes a number with exactly one decimal place. If the number came from the database as text, put (float) in front of it first.",
+    ],
+    files: [
+      { name: "README.md", editable: false, code: `# Trail Finder, Part 1 of 2 - The Trail List (Chapter 12)
+
+The Comox Valley Outdoor Club is building a website called **Trail Finder**. Its trails live in a database. This part builds the page that lists every trail. Part 2 builds the page for one trail - it doesn't depend on this part.
+
+## What to build
+Fill in the \`// TODO\` sections in \`index.php\`. Begin with the \`require 'database.php';\` line that is already there.
+
+1. Write **one SQL query** that joins \`trail\` and \`region\` and returns each trail's \`id\`, trail name, region name, \`distance_km\` and \`difficulty\`, sorted by \`distance_km\` from smallest to largest.
+2. Run it with \`$pdo->query()\` and get **all** the rows with \`fetchAll()\`.
+3. Show \`Trails found: N\`, where N is the number of trails (use \`count()\`).
+4. Use a \`foreach\` loop to print one table row per trail: **Trail**, **Region**, **Distance (km)** and **Difficulty**. Show the distance with exactly one decimal place (\`5.0\`, not \`5\`).
+5. Make each trail name a link to \`trail.php?id=\` followed by that trail's id (for example \`trail.php?id=3\`).
+6. Write a second query for the **longest** trail and get that **one** row with \`fetch()\`. Show \`Longest trail: NAME (X km)\`, or \`No trails available.\` if no row comes back.
+7. Print any text that came from the database with \`htmlspecialchars()\`.
+
+## What it should look like
+Trails found: 8, then the table with the shortest trail first (Heron Marsh Loop, 1.9) and the longest last (Raven Lake Trail, 11.2), then \`Longest trail: Raven Lake Trail (11.2 km)\`.
+
+## The database
+\`database.php\` builds the database and gives you a ready-to-use \`$pdo\` object. It is **read-only - don't change it**. The database is rebuilt, with the same data, every time you click Run. \`$pdo\` throws an exception on an SQL error and returns each row as an associative array, so you can write \`$row['name']\`.
+
+**region**: \`id\`, \`name\`
+
+| id | name |
+|---|---|
+| 1 | Comox Valley |
+| 2 | Strathcona Park |
+| 3 | Cumberland |
+
+**trail**: \`id\`, \`name\`, \`region_id\`, \`distance_km\`, \`difficulty\`, \`elevation_m\`, \`dog_friendly\` (1 = yes, 0 = no) and \`summary\`
+
+| id | name | region_id | distance_km | difficulty | elevation_m | dog_friendly |
+|---|---|---|---|---|---|---|
+| 1 | Cedar Ridge Loop | 1 | 6.4 | Moderate | 320 | 1 |
+| 2 | Tidewater Boardwalk | 1 | 2.8 | Easy | 15 | 1 |
+| 3 | Raven Lake Trail | 2 | 11.2 | Hard | 780 | 0 |
+| 4 | Fern Hollow Walk | 2 | 3.5 | Easy | 60 | 1 |
+| 5 | Bluff Point Scramble | 2 | 8.9 | Hard | 640 | 0 |
+| 6 | Old Mill Rail Trail | 3 | 5.0 | Easy | 40 | 1 |
+| 7 | Salmon Run Path | 1 | 4.1 | Easy | 90 | 1 |
+| 8 | Heron Marsh Loop | 1 | 1.9 | Easy | 5 | 1 |
+
+Numbers read from the database can arrive as text. \`number_format()\` and a \`(float)\` cast handle that.
+
+## Testing your code
+Click **Run** and compare your page with the description above. Then open the **Tests** tab and click **Run tests**.
+
+## Files in this project
+| File | Can I edit it? |
+|---|---|
+| \`index.php\` | ✅ Yes - this is the only file you need to change |
+| \`database.php\` | 🔒 Read-only - builds the database |
+| \`style.css\` | 🔒 Read-only - provided styling |
+| \`README.md\` | 🔒 Read-only - this file |
+` },
+      { name: "index.php", editable: true, code: `<?php
+// Trail Finder - Part 1 of 2: The Trail List (Chapter 12)
+// Show every trail in the database, shortest first.
+
+require 'database.php';   // gives you $pdo - a ready-made connection to the database
+
+// TODO 1: write ONE SQL query that joins trail and region and returns, for every trail:
+//         its id, its name, its region's name, distance_km and difficulty.
+//         Sort it by distance_km, smallest first.
+//         (Both tables have a "name" column - give them different names with AS.)
+$sql = '';
+
+// TODO 2: run the query and get ALL the rows into $trails
+$trails = [];
+
+// TODO 3: a second query for the LONGEST trail (largest distance_km).
+//         Get that one row into $longest. If there is no row, $longest will be false.
+$longest = false;
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Trail Finder</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="card wide">
+    <p class="badge">Trail Finder · Part 1 of 2</p>
+    <h1>🥾 All trails</h1>
+
+    <!-- TODO 4: show "Trails found: N" - N is how many trails you got back -->
+    <p>Trails found: </p>
+
+    <table class="trails">
+      <tr><th>Trail</th><th>Region</th><th>Distance (km)</th><th>Difficulty</th></tr>
+      <!-- TODO 5: a foreach loop - one <tr> per trail.
+                   Make the trail name a link to trail.php?id=ID.
+                   Show the distance with exactly one decimal place.
+                   Use htmlspecialchars() on text that came from the database. -->
+    </table>
+
+    <!-- TODO 6: "Longest trail: NAME (X km)" - or "No trails available." if $longest is false -->
+  </main>
+</body>
+</html>
+` },
+      { name: "database.php", editable: false, code: `<?php
+// database.php - PROVIDED FILE. Do not change it.
+// It builds the Trail Finder database and gives you a ready-to-use $pdo object.
+// (In this editor the database is rebuilt, with the same data, every time you click Run.)
+
+$pdo = new PDO('pgsql:', null, null, [
+    PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+]);
+
+$pdo->exec("
+    CREATE TABLE region (
+        id   INTEGER PRIMARY KEY,
+        name VARCHAR(50) NOT NULL
+    )
+");
+$pdo->exec("
+    CREATE TABLE trail (
+        id           INTEGER PRIMARY KEY,
+        name         VARCHAR(60)  NOT NULL,
+        region_id    INTEGER      NOT NULL,
+        distance_km  DECIMAL(4,1) NOT NULL,
+        difficulty   VARCHAR(10)  NOT NULL,
+        elevation_m  INTEGER      NOT NULL,
+        dog_friendly SMALLINT     NOT NULL,
+        summary      VARCHAR(200) NOT NULL
+    )
+");
+$pdo->exec("
+    INSERT INTO region (id, name) VALUES
+        (1, 'Comox Valley'),
+        (2, 'Strathcona Park'),
+        (3, 'Cumberland')
+");
+$pdo->exec("
+    INSERT INTO trail (id, name, region_id, distance_km, difficulty, elevation_m, dog_friendly, summary) VALUES
+        (1, 'Cedar Ridge Loop',     1,  6.4, 'Moderate', 320, 1, 'A shaded loop through old cedars with a lookout over the estuary.'),
+        (2, 'Tidewater Boardwalk',  1,  2.8, 'Easy',      15, 1, 'A flat boardwalk beside the tidal flats, ideal for birdwatching.'),
+        (3, 'Raven Lake Trail',     2, 11.2, 'Hard',     780, 0, 'A steady climb to a quiet alpine lake. Bring warm layers.'),
+        (4, 'Fern Hollow Walk',     2,  3.5, 'Easy',      60, 1, 'A gentle woodland stroll beside a mossy creek.'),
+        (5, 'Bluff Point Scramble', 2,  8.9, 'Hard',     640, 0, 'A rocky scramble rewarded with wide views of the valley.'),
+        (6, 'Old Mill Rail Trail',  3,  5.0, 'Easy',      40, 1, 'A wide, flat path along a former logging railway.'),
+        (7, 'Salmon Run Path',      1,  4.1, 'Easy',      90, 1, 'A riverside path that is busiest when the salmon return.'),
+        (8, 'Heron Marsh Loop',     1,  1.9, 'Easy',       5, 1, 'A short loop around a quiet marsh, perfect with young children.')
+");
+` },
+      { name: "style.css", editable: false, code: TRAIL_CSS },
+    ],
+  },
+  tf2: {
+    title: "Trail Finder Lab, Part 2 of 2 – The Trail Details Page",
+    preview: true,
+    sql: true,
+    functions: TRAIL_FUNCS,
+    tests: [
+      {"label": "trail.php?id=3 - details", "method": "get", "input": {"id": "3"}, "expectContains": ["Raven Lake Trail", "A steady climb to a quiet alpine lake. Bring warm layers.", "Region: Strathcona Park", "Distance: 11.2 km (7.0 miles)", "Difficulty: Hard", "Elevation gain: 780 m", "Dog friendly: No"], "expectNotContains": "Trail not found"},
+      {"label": "trail.php?id=3 - other trails in the region, by name, not itself", "method": "get", "input": {"id": "3"}, "expectContains": "More trails in Strathcona Park Bluff Point Scramble Fern Hollow Walk", "expectNotContains": "Fern Hollow Walk Raven Lake Trail", "expectLink": ["trail.php?id=5", "trail.php?id=4"]},
+      {"label": "trail.php?id=2 - miles are rounded (2.8 km = 1.7 miles)", "method": "get", "input": {"id": "2"}, "expectContains": ["Tidewater Boardwalk", "Distance: 2.8 km (1.7 miles)", "Dog friendly: Yes", "More trails in Comox Valley Cedar Ridge Loop Heron Marsh Loop Salmon Run Path"]},
+      {"label": "trail.php?id=5 - 8.9 km = 5.5 miles", "method": "get", "input": {"id": "5"}, "expectContains": ["Bluff Point Scramble", "Distance: 8.9 km (5.5 miles)", "Elevation gain: 640 m", "Dog friendly: No"]},
+      {"label": "trail.php?id=6 - the only trail in its region", "method": "get", "input": {"id": "6"}, "expectContains": ["Old Mill Rail Trail", "Distance: 5.0 km (3.1 miles)", "More trails in Cumberland", "No other trails in this region."], "expectNotContains": "Fern Hollow Walk"},
+      {"label": "trail.php?id=99 - no such trail", "method": "get", "input": {"id": "99"}, "expectContains": "Trail not found", "expectLink": "index.php", "expectNotContains": "Region:"},
+      {"label": "trail.php?id=abc - not a number", "method": "get", "input": {"id": "abc"}, "expectContains": "Trail not found", "expectNotContains": "Region:"},
+      {"label": "trail.php?id=3 OR 1=1 - sneaky input", "method": "get", "input": {"id": "3 OR 1=1"}, "expectContains": "Trail not found", "expectNotContains": "Region:"},
+      {"label": "trail.php - no id at all", "method": "get", "input": {}, "expectContains": "Trail not found", "expectNotContains": "Region:"},
+    ],
+    hints: [
+      "A prepared statement has three steps: prepare() the SQL with a placeholder such as :id, execute() it with an array like ['id' => $id], then fetch() the row. The slides show this under \"SQL queries that can change\".",
+      "filter_input() gives you false when the value isn't a whole number and null when it is missing. Both are \"falsy\", so if ($id) tells you a usable id arrived - and id 0 isn't a trail, so treating it as not found is correct.",
+      "round($number, 1) rounds to one decimal place. Remember number_format() when you print the result, so 5 shows as 5.0.",
+      "The second query needs two placeholders with two different names, for example :region_id and :id. \"Other trails\" means id <> :id (not equal), and ORDER BY name sorts them.",
+    ],
+    files: [
+      { name: "README.md", editable: false, code: `# Trail Finder, Part 2 of 2 - The Trail Details Page (Chapter 12)
+
+This part builds the page that shows **one** trail, chosen by the \`id\` in the web address, for example \`trail.php?id=3\`. Part 1 builds the list page - this part doesn't depend on it.
+
+## What to build
+Fill in the \`// TODO\` sections in \`trail.php\`. Begin with the \`require 'database.php';\` line that is already there.
+
+1. Read the \`id\` from the web address with \`filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT)\`.
+2. Finish the function \`getTrail(PDO $pdo, int $id)\`. It finds one trail by its id with a **prepared statement** and a placeholder (\`prepare()\` then \`execute()\`) - never the id typed straight into the SQL text. It joins \`region\` so the region name comes back too, and returns the single row from \`fetch()\` (\`false\` if there is no such trail).
+3. Finish the function \`kmToMiles(float $km): float\`. 1 km = 0.621371 miles. Round the result to one decimal place.
+4. If the \`id\` is missing, is not a whole number, or no trail has that id, show the heading \`Trail not found\` and a link back to \`index.php\`. Show nothing else.
+5. Otherwise show the trail's name as a heading, then its summary, then a list:
+   - \`Region: ...\`
+   - \`Distance: X km (Y miles)\` - both numbers with one decimal place
+   - \`Difficulty: ...\`
+   - \`Elevation gain: N m\`
+   - \`Dog friendly: Yes\` or \`Dog friendly: No\`
+6. Under the details, add the heading \`More trails in REGION\` (use the trail's region name) and list the **other** trails in that region, sorted by name, each as a link to its own \`trail.php?id=\` page. Get them with a second prepared query and \`fetchAll()\`. If there are none, show \`No other trails in this region.\`
+7. Print any text that came from the database with \`htmlspecialchars()\`.
+
+## A worked example (not one of the tests)
+For \`trail.php?id=1\`: Cedar Ridge Loop, 6.4 km is 6.4 × 0.621371 = 3.976... so it shows \`Distance: 6.4 km (4.0 miles)\`. Its region has three more trails, so the list shows Heron Marsh Loop, Salmon Run Path and Tidewater Boardwalk.
+
+## The database
+\`database.php\` builds the database and gives you a ready-to-use \`$pdo\` object. It is **read-only - don't change it**. The database is rebuilt, with the same data, every time you click Run. \`$pdo\` throws an exception on an SQL error and returns each row as an associative array, so you can write \`$row['name']\`.
+
+**region**: \`id\`, \`name\`
+
+| id | name |
+|---|---|
+| 1 | Comox Valley |
+| 2 | Strathcona Park |
+| 3 | Cumberland |
+
+**trail**: \`id\`, \`name\`, \`region_id\`, \`distance_km\`, \`difficulty\`, \`elevation_m\`, \`dog_friendly\` (1 = yes, 0 = no) and \`summary\`
+
+| id | name | region_id | distance_km | difficulty | elevation_m | dog_friendly |
+|---|---|---|---|---|---|---|
+| 1 | Cedar Ridge Loop | 1 | 6.4 | Moderate | 320 | 1 |
+| 2 | Tidewater Boardwalk | 1 | 2.8 | Easy | 15 | 1 |
+| 3 | Raven Lake Trail | 2 | 11.2 | Hard | 780 | 0 |
+| 4 | Fern Hollow Walk | 2 | 3.5 | Easy | 60 | 1 |
+| 5 | Bluff Point Scramble | 2 | 8.9 | Hard | 640 | 0 |
+| 6 | Old Mill Rail Trail | 3 | 5.0 | Easy | 40 | 1 |
+| 7 | Salmon Run Path | 1 | 4.1 | Easy | 90 | 1 |
+| 8 | Heron Marsh Loop | 1 | 1.9 | Easy | 5 | 1 |
+
+Numbers read from the database can arrive as text. \`number_format()\` and a \`(float)\` cast handle that.
+
+## Testing your code
+Click **Run**, then change the address in the preview to try different ids - an id that doesn't exist and one that isn't a number too. Then open the **Tests** tab and click **Run tests**.
+
+## Files in this project
+| File | Can I edit it? |
+|---|---|
+| \`trail.php\` | ✅ Yes - this is the only file you need to change |
+| \`database.php\` | 🔒 Read-only - builds the database |
+| \`style.css\` | 🔒 Read-only - provided styling |
+| \`README.md\` | 🔒 Read-only - this file |
+` },
+      { name: "trail.php", editable: true, code: `<?php
+// Trail Finder - Part 2 of 2: The Trail Details Page (Chapter 12)
+// Show ONE trail, chosen by the id in the web address, e.g. trail.php?id=3
+
+require 'database.php';   // gives you $pdo - a ready-made connection to the database
+
+// TODO 1: finish getTrail() - find ONE trail by its id.
+//         Use a prepared statement with a placeholder (prepare + execute).
+//         Join region so the region's name comes back too.
+//         Return the single row, or false if there is no such trail.
+function getTrail(PDO $pdo, int $id)
+{
+
+}
+
+// TODO 2: finish kmToMiles() - 1 km = 0.621371 miles, rounded to one decimal place
+function kmToMiles(float $km): float
+{
+    return 0.0;
+}
+
+// TODO 3: read the id from the web address (it must be a whole number),
+//         then look the trail up. $trail is the row, or false if the id was
+//         missing, was not a whole number, or no trail has that id.
+$id    = null;
+$trail = false;
+
+// TODO 4: only when a trail was found: get the OTHER trails in the same region
+//         (not this one), sorted by name, into $others. Use a prepared statement.
+$others = [];
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Trail details</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="card wide">
+    <p class="badge">Trail Finder · Part 2 of 2</p>
+
+    <?php if (!$trail): ?>
+      <!-- TODO 5: heading "Trail not found" and a link back to index.php -->
+    <?php else: ?>
+      <!-- TODO 6: the trail's name as a heading, then its summary, then a list:
+                   Region: ...
+                   Distance: X km (Y miles)
+                   Difficulty: ...
+                   Elevation gain: N m
+                   Dog friendly: Yes / No -->
+
+      <!-- TODO 7: heading "More trails in REGION", then a linked list of $others,
+                   or "No other trails in this region." when there are none -->
+    <?php endif; ?>
+  </main>
+</body>
+</html>
+` },
+      { name: "database.php", editable: false, code: `<?php
+// database.php - PROVIDED FILE. Do not change it.
+// It builds the Trail Finder database and gives you a ready-to-use $pdo object.
+// (In this editor the database is rebuilt, with the same data, every time you click Run.)
+
+$pdo = new PDO('pgsql:', null, null, [
+    PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+]);
+
+$pdo->exec("
+    CREATE TABLE region (
+        id   INTEGER PRIMARY KEY,
+        name VARCHAR(50) NOT NULL
+    )
+");
+$pdo->exec("
+    CREATE TABLE trail (
+        id           INTEGER PRIMARY KEY,
+        name         VARCHAR(60)  NOT NULL,
+        region_id    INTEGER      NOT NULL,
+        distance_km  DECIMAL(4,1) NOT NULL,
+        difficulty   VARCHAR(10)  NOT NULL,
+        elevation_m  INTEGER      NOT NULL,
+        dog_friendly SMALLINT     NOT NULL,
+        summary      VARCHAR(200) NOT NULL
+    )
+");
+$pdo->exec("
+    INSERT INTO region (id, name) VALUES
+        (1, 'Comox Valley'),
+        (2, 'Strathcona Park'),
+        (3, 'Cumberland')
+");
+$pdo->exec("
+    INSERT INTO trail (id, name, region_id, distance_km, difficulty, elevation_m, dog_friendly, summary) VALUES
+        (1, 'Cedar Ridge Loop',     1,  6.4, 'Moderate', 320, 1, 'A shaded loop through old cedars with a lookout over the estuary.'),
+        (2, 'Tidewater Boardwalk',  1,  2.8, 'Easy',      15, 1, 'A flat boardwalk beside the tidal flats, ideal for birdwatching.'),
+        (3, 'Raven Lake Trail',     2, 11.2, 'Hard',     780, 0, 'A steady climb to a quiet alpine lake. Bring warm layers.'),
+        (4, 'Fern Hollow Walk',     2,  3.5, 'Easy',      60, 1, 'A gentle woodland stroll beside a mossy creek.'),
+        (5, 'Bluff Point Scramble', 2,  8.9, 'Hard',     640, 0, 'A rocky scramble rewarded with wide views of the valley.'),
+        (6, 'Old Mill Rail Trail',  3,  5.0, 'Easy',      40, 1, 'A wide, flat path along a former logging railway.'),
+        (7, 'Salmon Run Path',      1,  4.1, 'Easy',      90, 1, 'A riverside path that is busiest when the salmon return.'),
+        (8, 'Heron Marsh Loop',     1,  1.9, 'Easy',       5, 1, 'A short loop around a quiet marsh, perfect with young children.')
+");
+` },
+      { name: "style.css", editable: false, code: TRAIL_CSS },
+    ],
+  },
   blank: {
     title: "Blank PHP Editor",
     preview: false,
@@ -2051,6 +2429,7 @@ button{margin-top:6px;padding:8px 16px;background:#2f6fed;color:#fff;border:0;bo
 // above for future reuse, but are hidden from the picker and from direct ?q= links - add
 // their keys back here to offer them again.
 const EXAM_SET = [
+  "tf1", "tf2",               // Trail Finder lab (Chapter 12 - databases)
   "il1", "il2", "il3", "il4", // Island Lens lab (Chapters 7-10)
 ];
 if (EXAM_SET.length) {

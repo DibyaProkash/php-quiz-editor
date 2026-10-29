@@ -64,6 +64,13 @@ const WEB_PRELUDE =
   '$h=(string)file_get_contents($f,false,null,0,512);if($h==="")return "application/x-empty";' +
   'if(strncmp($h,"%PDF",4)===0)return "application/pdf";' +
   'return preg_match("/[\\\\x00-\\\\x08\\\\x0e-\\\\x1f]/",$h)?"application/octet-stream":"text/plain";}' +
+  // filter_input() & co read the real request, which this engine never has - so the
+  // stand-ins read the same $_GET / $_POST / $_COOKIE the page already sees.
+  'function __fsrc($t){return $t===INPUT_POST?$_POST:($t===INPUT_GET?$_GET:($t===INPUT_COOKIE?$_COOKIE:($t===INPUT_SERVER?$_SERVER:($t===INPUT_ENV?$_ENV:[]))));}' +
+  'function __fhv($t,$n){return array_key_exists($n,__fsrc($t));}' +
+  'function __fi($t,$n,$f=FILTER_DEFAULT,$o=0){$s=__fsrc($t);$fl=is_array($o)?($o["flags"]??0):$o;' +
+  'if(!array_key_exists($n,$s))return($fl&FILTER_NULL_ON_FAILURE)?false:null;return filter_var($s[$n],$f,$o);}' +
+  'function __fia($t,$d=FILTER_DEFAULT,$e=true){$s=__fsrc($t);return is_array($d)?filter_var_array($s,$d,$e):filter_var_array($s,$d);}' +
   // The end-of-request hook: Set-Cookie headers, plus the session both as plain data (for
   // the Storage tab and tests) and as its exact serialized text (to restore it next time).
   // After session_write_close()/session_regenerate_id() it reads the session's own file.
