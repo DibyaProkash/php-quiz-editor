@@ -2429,8 +2429,8 @@ button{margin-top:6px;padding:8px 16px;background:#2f6fed;color:#fff;border:0;bo
 // above for future reuse, but are hidden from the picker and from direct ?q= links - add
 // their keys back here to offer them again.
 const EXAM_SET = [
-  "tf1", "tf2",               // Trail Finder lab (Chapter 12 - databases)
-  "il1", "il2", "il3", "il4", // Island Lens lab (Chapters 7-10)
+  "tf1", "tf2", // Trail Finder lab (Chapter 12 - databases)
+  // "il1", "il2", "il3", "il4", // Island Lens lab (Chapters 7-10) - hidden; add back to offer again
 ];
 if (EXAM_SET.length) {
   // Rebuilt in EXAM_SET's order - the picker lists questions in object key order.
