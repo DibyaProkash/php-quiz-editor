@@ -1845,13 +1845,14 @@ Trails found: 8, then the table with the shortest trail first (Heron Marsh Loop,
 Numbers read from the database can arrive as text. \`number_format()\` and a \`(float)\` cast handle that.
 
 ## Testing your code
-Click **Run** and compare your page with the description above. Then open the **Tests** tab and click **Run tests**.
+Click **Run** and compare your page with the description above. Clicking a trail name opens a placeholder \`trail.php\` that shows the id your link sent. Then open the **Tests** tab and click **Run tests**.
 
 ## Files in this project
 | File | Can I edit it? |
 |---|---|
 | \`index.php\` | ✅ Yes - this is the only file you need to change |
 | \`database.php\` | 🔒 Read-only - builds the database |
+| \`trail.php\` | 🔒 Read-only - a placeholder that shows which id your links send (Part 2 builds the real page) |
 | \`style.css\` | 🔒 Read-only - provided styling |
 | \`README.md\` | 🔒 Read-only - this file |
 ` },
@@ -1949,6 +1950,28 @@ $pdo->exec("
 ");
 ` },
       { name: "style.css", editable: false, code: TRAIL_CSS },
+      { name: "trail.php", editable: false, code: `<?php
+// Read-only placeholder for Part 1. The real trail details page is Part 2 -
+// this one only shows which id your link sent, so you can check your links work.
+$id = filter_input(INPUT_GET, 'id');
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Trail details (Part 2)</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="card wide">
+    <p class="badge">Placeholder · built in Part 2</p>
+    <h1>Your link opened trail.php</h1>
+    <p>It sent id = <strong><?= htmlspecialchars($id ?? '(none)') ?></strong></p>
+    <p><a href="index.php">Back to the trail list</a></p>
+  </main>
+</body>
+</html>
+` },
     ],
   },
   tf2: {
@@ -2024,13 +2047,14 @@ For \`trail.php?id=1\`: Cedar Ridge Loop, 6.4 km is 6.4 × 0.621371 = 3.976... s
 Numbers read from the database can arrive as text. \`number_format()\` and a \`(float)\` cast handle that.
 
 ## Testing your code
-Click **Run**, then change the address in the preview to try different ids - an id that doesn't exist and one that isn't a number too. Then open the **Tests** tab and click **Run tests**.
+Click **Run**. With no id in the address, your page should say *Trail not found* - click its link back to \`index.php\`, a read-only helper page with links that open \`trail.php\` with different ids (including ones that don't exist or aren't numbers). Then open the **Tests** tab and click **Run tests**.
 
 ## Files in this project
 | File | Can I edit it? |
 |---|---|
 | \`trail.php\` | ✅ Yes - this is the only file you need to change |
 | \`database.php\` | 🔒 Read-only - builds the database |
+| \`index.php\` | 🔒 Read-only - a helper page of test links (Part 1 builds the real list page) |
 | \`style.css\` | 🔒 Read-only - provided styling |
 | \`README.md\` | 🔒 Read-only - this file |
 ` },
@@ -2140,6 +2164,35 @@ $pdo->exec("
 ");
 ` },
       { name: "style.css", editable: false, code: TRAIL_CSS },
+      { name: "index.php", editable: false, code: `<?php
+// Read-only helper for Part 2. Part 1 builds the real list page - this one just
+// gives you links so you can open trail.php with different ids in the Preview.
+$tries = [1, 2, 3, 4, 5, 6, 7, 8];
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Trail Finder - test links</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="card wide">
+    <p class="badge">Helper page · not part of your answer</p>
+    <h1>Open trail.php with an id</h1>
+    <ul>
+      <?php foreach ($tries as $n): ?>
+        <li><a href="trail.php?id=<?= $n ?>">trail.php?id=<?= $n ?></a></li>
+      <?php endforeach; ?>
+      <li><a href="trail.php?id=99">trail.php?id=99</a> (no such trail)</li>
+      <li><a href="trail.php?id=abc">trail.php?id=abc</a> (not a number)</li>
+      <li><a href="trail.php?id=3%20OR%201%3D1">trail.php?id=3 OR 1=1</a> (sneaky input)</li>
+      <li><a href="trail.php">trail.php</a> (no id at all)</li>
+    </ul>
+  </main>
+</body>
+</html>
+` },
     ],
   },
   blank: {

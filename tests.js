@@ -96,7 +96,9 @@ function testChecks(t, text, state) {
   }
   if (t.expectLink !== undefined) {
     const doc = new DOMParser().parseFromString(text, "text/html");
-    const hrefs = [...doc.querySelectorAll("a[href]")].map((a) => a.getAttribute("href"));
+    // "./trail.php?id=3" and " trail.php?id=3 " go to the same place as "trail.php?id=3"
+    const norm = (h) => h.trim().replace(/^\.\//, "");
+    const hrefs = [...doc.querySelectorAll("a[href]")].map((a) => norm(a.getAttribute("href")));
     for (const want of [].concat(t.expectLink))
       out.push({ label: "link to", want, actual: hrefs.includes(want) ? want : "(no such link)", ok: hrefs.includes(want) });
   }
