@@ -309,10 +309,10 @@ async function run() {
     // before any of the student's own <script> content runs, or an error/log from that
     // early code (very common - it's often the first thing on the page) would run
     // against the ORIGINAL console/no error handler and never reach the Console tab.
-    $("frame").srcdoc = injectZoomStyle(
+    setPreview(injectZoomStyle(
       injectBridge(inline(text)),
       previewScale,
-    );
+    ));
   }
   engineBusy = false;
   setPickerBusy(false);

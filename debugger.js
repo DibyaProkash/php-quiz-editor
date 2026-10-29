@@ -375,10 +375,10 @@ async function runDebug() {
       // Same as run(): a fresh page gets a fresh console, and BRIDGE must go in first.
       if (typeof resetConsolePanel === "function") resetConsolePanel();
       $("navNote").hidden = true; // Debug always runs the main file, never a followed link
-      $("frame").srcdoc = injectZoomStyle(
+      setPreview(injectZoomStyle(
         injectBridge(inline(output)),
         previewScale,
-      );
+      ));
     }
     setDebugState(trace, output, sinkErrs, flagged);
   } catch (err) {

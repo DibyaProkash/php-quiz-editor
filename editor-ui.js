@@ -127,6 +127,19 @@ function renderFuncs(list) {
   ).join('');
 }
 
+// Loads a page into the Preview by swapping in a brand-new <iframe> rather than
+// re-setting srcdoc on the old one. Chrome can stop painting an iframe whose srcdoc was
+// changed while it was hidden (e.g. switching questions from the Tests tab): the page
+// loads but Preview stays blank, and every later Run stays blank too until a hard
+// refresh. A fresh element has no such stale state. Everything else looks the frame up
+// by id each time ($('frame')), so nothing holds on to the old element.
+function setPreview(html) {
+  const old = $('frame'), f = old.cloneNode(false);
+  f.removeAttribute('srcdoc');
+  f.srcdoc = html;
+  old.replaceWith(f);
+}
+
 function loadQuestion() {
   clearUndo();
   const q = QUESTIONS[key];
@@ -164,7 +177,7 @@ function loadQuestion() {
   const hb = $('hint'); hb.hidden = !q.hints?.length; hb.disabled = false;
   hb.textContent = 'Show hint (0/' + (q.hints?.length || 0) + ')';
   $('out').innerHTML = '<span class="m">Press Run to see your result here.</span>';
-  $('frame').srcdoc = '<p style="font:14px system-ui;color:#777;padding:16px">Press Run to see your page here.</p>';
+  setPreview('<p style="font:14px system-ui;color:#777;padding:16px">Press Run to see your page here.</p>');
   const tests = q.tests || [];
   $('vTests').hidden = !tests.length;
   $('runTests').innerHTML = BEAKER + ' Run tests (' + tests.length + ')'; $('runTests').disabled = false;
