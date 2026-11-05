@@ -105,16 +105,23 @@
           veil.hidden = false;
           root.setAttribute("inert", "");
           root.setAttribute("aria-hidden", "true");
+          // Shown as the wall-clock time written in QUIZ_UNLOCK_AT itself (its own UTC
+          // offset), not converted to the device's zone: browsers with out-of-date time-zone
+          // data still think B.C. falls back to UTC-8 in November and would show the wrong
+          // hour. The countdown below uses the real instant, so it is right either way.
+          var off = /([+-])(\d\d):?(\d\d)$/.exec(QUIZ_UNLOCK_AT),
+            offMs = off ? (off[1] === "-" ? -1 : 1) * (+off[2] * 60 + +off[3]) * 60000 : 0;
           document.getElementById("lockWhen").textContent =
             "It opens " +
-            new Date(unlockMs).toLocaleString(undefined, {
+            new Date(unlockMs + offMs).toLocaleString(undefined, {
+              timeZone: "UTC",
               weekday: "long",
               month: "long",
               day: "numeric",
               hour: "numeric",
               minute: "2-digit",
             }) +
-            " (your device's local time).";
+            " (Pacific time).";
           function pad(n) {
             return n < 10 ? "0" + n : "" + n;
           }
